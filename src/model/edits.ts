@@ -64,6 +64,8 @@ export interface AssignArgs {
   featureId?: string;
   /** 或輸入名稱（比對既有、否則新建）。留空 → 自動命名。 */
   featureName?: string;
+  /** 封閉區框選帶來的裁切形狀：key → 局部多邊形（null = 整格、清掉既有形狀）。 */
+  shapes?: ReadonlyMap<CellKey, CellPoly | null> | null;
 }
 
 export function assignCells(doc: MapDoc, keys: Iterable<CellKey>, args: AssignArgs): MapDoc {
@@ -86,6 +88,11 @@ export function assignCells(doc: MapDoc, keys: Iterable<CellKey>, args: AssignAr
   for (const k of keys) {
     const cur: Cell = doc.cells[k] ? { ...doc.cells[k]! } : {};
     if (cellHidden(cur)) delete cur.poly;
+    if (args.shapes?.has(k)) {
+      const sp = args.shapes.get(k);
+      if (sp) cur.poly = sp;
+      else delete cur.poly;
+    }
     cur.cat = categoryId;
     cur.feature = feature.id;
     keepOrDrop(doc.cells, k, cur);

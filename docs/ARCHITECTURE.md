@@ -94,6 +94,16 @@ core/        純網域邏輯：幾何、band、編號、taxonomy。零 DOM、零
 `vocabulary`），並在 `src/templates/index.ts` 註冊。市場範本 =
 `donggang-market.ts`，其巨大的 `cells` 直接沿用 legacy 的 `DEFAULT_PLAN_CELLS`。
 
+## UI 版面（桌機優先，模仿原版的簡潔感）
+
+- `Editor` 用 CSS grid：深色 header ／ toolbar + 地圖 ／ 右側常駐側欄（`SidePanel`：
+  清單 + 圖例分頁）。手機（<960px）側欄變底部抽屜，右下 `panel-fab` 開合。
+- 地圖上的控制項全部**懸浮**在 `.stagewrap` 上：`ZoomStack`、`MapHint`（隨工具換提示）、
+  `ActionBar`（選取/切線/筆刷三種變體，色彩標記按鈕）。
+- 選單 / 表單用 `Dialog`（置中懸浮，非 sheet）。少數離散選項用 `CycleButton`（點擊循環）。
+- `gestures.ts` 的 `onDown` 會忽略落在 `button/input/.zoomstack/.actionbar/...` 上的
+  指標事件，讓懸浮控制項可正常點按。
+
 ## 渲染策略（沿用 legacy 的做法，別重造）
 
 - 兩張 `<canvas>`（base + overlay）疊在一個 `#stage` 容器裡。

@@ -3,6 +3,7 @@ export type UiEventMap = {
   "assign-sheet": undefined;
   "cell-detail": string;
   "edit-cut": string;
+  toast: string;
 };
 
 type Handler<K extends keyof UiEventMap> = (payload: UiEventMap[K]) => void;

@@ -1,12 +1,11 @@
 import { useEffect, useState } from "preact/hooks";
-import * as store from "../store";
 import { uiEvents } from "../store";
+import { t } from "../i18n";
 import { MapStage } from "./MapStage";
 import { Header } from "./Header";
 import { Toolbar } from "./Toolbar";
-import { SelectionBar } from "./SelectionBar";
-import { CutBar } from "./CutBar";
-import { BottomPanel } from "./BottomPanel";
+import { SidePanel } from "./panels";
+import { ToastHost, LegendIcon } from "./widgets";
 import {
   AssignSheet,
   CellDetailSheet,
@@ -16,11 +15,12 @@ import {
   ExportSheet,
 } from "./sheets";
 
-export type SheetId = "assign" | "cell" | "settings" | "cats" | "baseimg" | "export" | null;
+type SheetId = "assign" | "cell" | "settings" | "cats" | "baseimg" | "export" | null;
 
 export function Editor() {
   const [sheet, setSheet] = useState<SheetId>(null);
   const [cellKey, setCellKey] = useState<string | null>(null);
+  const [panelOpen, setPanelOpen] = useState(false);
 
   useEffect(() => {
     const offAssign = uiEvents.on("assign-sheet", () => setSheet("assign"));
@@ -39,11 +39,21 @@ export function Editor() {
   return (
     <div class="appshell">
       <Header onMenu={() => setSheet("settings")} />
-      <Toolbar />
-      <MapStage />
-      <SelectionBar onAssign={() => setSheet("assign")} />
-      {store.editingCutId.value && <CutBar />}
-      <BottomPanel />
+      <div class="workspace">
+        <div class="workmain">
+          <Toolbar />
+          <MapStage onAssign={() => setSheet("assign")} />
+        </div>
+        <div class={panelOpen ? "sidewrap open" : "sidewrap"}>
+          <SidePanel />
+        </div>
+      </div>
+
+      <button class="panel-fab" onClick={() => setPanelOpen(!panelOpen)} aria-label={t("panel.toggle")}>
+        <LegendIcon size={18} />
+      </button>
+
+      <ToastHost />
 
       {sheet === "assign" && <AssignSheet onClose={close} />}
       {sheet === "cell" && cellKey && <CellDetailSheet cellKey={cellKey} onClose={close} />}

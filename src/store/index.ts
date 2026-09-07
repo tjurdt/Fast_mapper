@@ -3,8 +3,9 @@
  * 由 action 負責 history、重算 geometry/numbers、以及防抖存檔。
  */
 import { batch, computed, signal } from "@preact/signals";
-import type { CellKey, MapDoc } from "../core/types";
+import type { CellKey, CellPoly, MapDoc } from "../core/types";
 import { MapGeometry } from "../core/geometry";
+import { selectEnclosedRegion } from "../core/enclosed";
 import { computeNumbers } from "../core/numbering";
 import { DocHistory } from "../model/commands";
 import { cloneDoc, loadProject, serializeProject } from "../model/document";
@@ -29,8 +30,10 @@ import {
   deleteFeature,
   deletePlanLayer,
   eraseCells,
+  moveCutEndpoint,
   moveSelection,
   renameFeature,
+  toggleFeatureCell,
   setFeatureCategory,
   setGridSize,
   stepCutDepth,
@@ -53,11 +56,20 @@ export const projectList = signal<ProjectSummary[]>([]);
 export const ready = signal(false);
 
 export const selection = signal<ReadonlySet<CellKey>>(new Set());
+/** 封閉區框選帶來的每格裁切形狀（跟 selection 平行）。 */
+export const selectionShapes = signal<ReadonlyMap<CellKey, CellPoly | null>>(new Map());
 export const inspectedFeature = signal<string | null>(null);
+/** 筆刷工具的目標命名區域。 */
+export const activeFeatureId = signal<string | null>(null);
 export const activeToolId = signal<string>("select");
 
 export function setTool(id: string): void {
+  if (activeToolId.value === id) return;
   activeToolId.value = id;
+  clearSelection();
+  editingCutId.value = null;
+  ghostCut.value = null;
+  if (id !== "paint") activeFeatureId.value = null;
 }
 
 /** 只影響渲染、不進歷史的暫時狀態（拖曳框、幽靈切線、正在編輯的切線）。 */
@@ -95,10 +107,12 @@ export const scene = computed<Scene | null>(() => {
     view: p.view,
     numbers: numbers.value,
     selection: selection.value,
-    highlightFeature: inspectedFeature.value,
+    highlightFeature: inspectedFeature.value ?? activeFeatureId.value,
     cutMode: activeToolId.value === "cut",
     dragRect: dragRect.value,
     ghostCut: ghostCut.value,
+    selectionShapes: selectionShapes.value,
+    editingCut: editingCutId.value ? (p.doc.cuts.find((c) => c.id === editingCutId.value) ?? null) : null,
   };
 });
 
@@ -199,10 +213,12 @@ export function renameProject(name: string): void {
 
 export function setSelection(keys: Iterable<CellKey>): void {
   selection.value = new Set(keys);
+  if (selectionShapes.value.size) selectionShapes.value = new Map();
 }
 
 export function clearSelection(): void {
   if (selection.value.size) selection.value = new Set();
+  if (selectionShapes.value.size) selectionShapes.value = new Map();
 }
 
 export function toggleCell(k: CellKey): void {
@@ -210,6 +226,7 @@ export function toggleCell(k: CellKey): void {
   if (next.has(k)) next.delete(k);
   else next.add(k);
   selection.value = next;
+  if (selectionShapes.value.size) selectionShapes.value = new Map();
 }
 
 /** 依影像矩形框選（一般格 + actual 視圖的 band 格）。add=false 時取代選取。 */
@@ -221,12 +238,29 @@ export function selectRect(rect: readonly [number, number, number, number], add 
   const next = add ? new Set(selection.value) : new Set<CellKey>();
   for (const k of keys) next.add(k);
   selection.value = next;
+  if (selectionShapes.value.size) selectionShapes.value = new Map();
+}
+
+/** 點在被牆圍住的空白處 → 選取整塊封閉區域（邊界格裁成斜切形狀）。 */
+export function selectEnclosed(x: number, y: number): { ok: boolean; reason?: string } {
+  const geo = geometry.value;
+  const p = project.value;
+  if (!geo || !p) return { ok: false };
+  const res = selectEnclosedRegion(geo, x, y, p.view.view);
+  if ("error" in res) return { ok: false, reason: res.error };
+  batch(() => {
+    selection.value = new Set(res.keys);
+    selectionShapes.value = res.shapes;
+    editingCutId.value = null;
+  });
+  return { ok: true };
 }
 
 export function assignSelection(args: AssignArgs): void {
   if (!selection.value.size) return;
   const keys = [...selection.value];
-  editDoc((doc) => assignCells(doc, keys, args));
+  const shapes = selectionShapes.value.size ? new Map(selectionShapes.value) : null;
+  editDoc((doc) => assignCells(doc, keys, { ...args, shapes }));
   clearSelection();
 }
 
@@ -252,6 +286,45 @@ export function moveSelectionBy(dir: MoveDir): { ok: boolean; reason?: string } 
 
 export function inspectFeature(id: string | null): void {
   inspectedFeature.value = id;
+}
+
+// ---- 筆刷（目標命名區域）----
+
+export function setActiveFeature(id: string | null): void {
+  activeFeatureId.value = id;
+  if (id) {
+    activeToolId.value = "paint";
+    clearSelection();
+    inspectedFeature.value = null;
+  }
+}
+
+export function paintCell(k: CellKey): void {
+  const id = activeFeatureId.value;
+  if (!id) return;
+  editDoc((doc) => toggleFeatureCell(doc, k, id));
+}
+
+export function paintRect(rect: readonly [number, number, number, number], erase: boolean): void {
+  const id = activeFeatureId.value;
+  const geo = geometry.value;
+  const p = project.value;
+  if (!id || !geo || !p) return;
+  const keys = geo.cellsInRect(rect[0], rect[1], rect[2], rect[3], p.view.view === "actual");
+  editDoc((doc) => {
+    for (const k of keys) {
+      const cur = doc.cells[k];
+      const has = cur?.feature === id;
+      if (erase ? has : !has) toggleFeatureCell(doc, k, id);
+    }
+    return doc;
+  });
+}
+
+// ---- 切線端點拖曳 ----
+
+export function moveCutEndpointTo(cutId: string, end: "a" | "b", x: number, y: number): void {
+  editDoc((doc) => moveCutEndpoint(doc, cutId, end, x, y));
 }
 
 export function addWallSegment(seg: { ax: number; ay: number; bx: number; by: number }): string {

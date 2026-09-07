@@ -8,6 +8,8 @@ import type { CellKey } from "../../core/types";
 import type { ViewSettings } from "../../model/schema";
 import type { GesturePoint } from "../gestures";
 
+export type ImgRect = readonly [number, number, number, number];
+
 /** 一個手勢點，已解析出影像座標 / 格鍵 / 最近格線交點。 */
 export interface ResolvedPoint {
   stage: GesturePoint;
@@ -20,6 +22,8 @@ export interface ToolContext {
   geo: MapGeometry;
   view: ViewSettings;
   selection: ReadonlySet<CellKey>;
+  editingCutId: string | null;
+  activeFeatureId: string | null;
   resolve(p: GesturePoint): ResolvedPoint;
   /** 影像單位容差（約等於 26 螢幕像素），給「靠近某條線」判定用。 */
   hitTolerance(): number;
@@ -31,13 +35,20 @@ export interface ToolContext {
 export interface ToolActions {
   toggleCell(k: CellKey): void;
   setSelection(keys: Iterable<CellKey>): void;
-  selectRect(rect: readonly [number, number, number, number], add?: boolean): void;
+  selectRect(rect: ImgRect, add?: boolean): void;
   clearSelection(): void;
   eraseSelection(): void;
   inspectFeature(id: string | null): void;
   addWall(seg: { ax: number; ay: number; bx: number; by: number }): void;
   beginEditCut(cutId: string | null): void;
-  /** 開啟指定分類 sheet（Phase 5 接 UI；在那之前可 no-op）。 */
+  moveCutEndpoint(cutId: string, end: "a" | "b", x: number, y: number): void;
+  /** 封閉區洪水框選；失敗回傳原因字串。 */
+  selectEnclosed(x: number, y: number): { ok: boolean; reason?: string };
+  setActiveFeature(id: string | null): void;
+  paintCell(k: CellKey): void;
+  paintRect(rect: ImgRect, erase: boolean): void;
+  toast(message: string): void;
+  /** 開啟指定分類 sheet。 */
   openAssignSheet(): void;
   /** 開啟單格細節 sheet。 */
   openCellDetail(k: CellKey): void;
@@ -45,20 +56,21 @@ export interface ToolActions {
 
 /** 只影響渲染的暫時狀態。 */
 export interface TransientActions {
-  setDragRect(rect: readonly [number, number, number, number] | null): void;
-  setGhostCut(seg: readonly [number, number, number, number] | null): void;
+  setDragRect(rect: ImgRect | null): void;
+  setGhostCut(seg: ImgRect | null): void;
 }
 
 export interface Tool {
   id: string;
   /** i18n key；UI 顯示用。 */
   labelKey: string;
+  /** 提示文字 i18n key（顯示在地圖上的 hint pill）。 */
+  hintKey?: string;
   onTap?(ctx: ToolContext, p: ResolvedPoint): void;
   onLongPress?(ctx: ToolContext, p: ResolvedPoint): void;
   onDragStart?(ctx: ToolContext, from: ResolvedPoint): void;
   onDrag?(ctx: ToolContext, from: ResolvedPoint, to: ResolvedPoint): void;
   onDragEnd?(ctx: ToolContext, from: ResolvedPoint, to: ResolvedPoint): void;
-  /** 進入 / 離開此工具時。 */
   onActivate?(ctx: ToolContext): void;
   onDeactivate?(ctx: ToolContext): void;
 }

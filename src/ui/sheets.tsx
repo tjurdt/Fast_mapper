@@ -1,7 +1,7 @@
 import { useState } from "preact/hooks";
 import { t } from "../i18n";
 import { tv } from "./vocab";
-import { Sheet } from "./Sheet";
+import { Dialog } from "./Dialog";
 import * as store from "../store";
 import { isBandKey } from "../core/keys";
 
@@ -13,7 +13,7 @@ export function AssignSheet({ onClose }: { onClose: () => void }) {
   const [name, setName] = useState("");
 
   return (
-    <Sheet
+    <Dialog
       title={tv("assign.title")}
       onClose={onClose}
       footer={
@@ -51,7 +51,7 @@ export function AssignSheet({ onClose }: { onClose: () => void }) {
           onInput={(e) => setName((e.target as HTMLInputElement).value)}
         />
       </label>
-    </Sheet>
+    </Dialog>
   );
 }
 
@@ -84,7 +84,7 @@ export function CellDetailSheet({ cellKey, onClose }: { cellKey: string; onClose
   };
 
   return (
-    <Sheet
+    <Dialog
       title={t("cell.title")}
       onClose={onClose}
       footer={
@@ -131,7 +131,7 @@ export function CellDetailSheet({ cellKey, onClose }: { cellKey: string; onClose
           ))}
         </select>
       </label>
-    </Sheet>
+    </Dialog>
   );
 }
 
@@ -151,7 +151,7 @@ export function SettingsSheet({
   const p = store.project.value!;
   const v = p.view;
   return (
-    <Sheet title={t("settings.title")} onClose={onClose}>
+    <Dialog title={t("settings.title")} onClose={onClose}>
       <label class="check">
         <input
           type="checkbox"
@@ -219,7 +219,7 @@ export function SettingsSheet({
         </button>
         <button onClick={pickJson}>{t("settings.importJson")}</button>
       </div>
-    </Sheet>
+    </Dialog>
   );
 }
 
@@ -248,7 +248,7 @@ export function CategoryModal({ onClose }: { onClose: () => void }) {
   };
 
   return (
-    <Sheet
+    <Dialog
       title={tv("cats.title")}
       onClose={onClose}
       footer={
@@ -285,7 +285,7 @@ export function CategoryModal({ onClose }: { onClose: () => void }) {
         ))}
       </ul>
       <button onClick={add}>{t("cats.add")}</button>
-    </Sheet>
+    </Dialog>
   );
 }
 
@@ -306,7 +306,7 @@ export function ExportSheet({ onClose }: { onClose: () => void }) {
   };
 
   return (
-    <Sheet title={t("settings.export")} onClose={onClose}>
+    <Dialog title={t("settings.export")} onClose={onClose}>
       <div class="seg">
         {(["plan", "overlay", "actual"] as const).map((m) => (
           <button key={m} class={mode === m ? "on" : ""} onClick={() => setMode(m)}>
@@ -361,7 +361,7 @@ export function ExportSheet({ onClose }: { onClose: () => void }) {
           {busy === "xlsx" ? "…" : "Excel"}
         </button>
       </div>
-    </Sheet>
+    </Dialog>
   );
 }
 
@@ -371,7 +371,7 @@ export function BaseImageSheet({ onClose }: { onClose: () => void }) {
   const p = store.project.value!;
   const img = p.doc.baseImage;
   return (
-    <Sheet title={t("baseimg.title")} onClose={onClose}>
+    <Dialog title={t("baseimg.title")} onClose={onClose}>
       <label class="btnrow">
         <input
           type="file"
@@ -413,7 +413,7 @@ export function BaseImageSheet({ onClose }: { onClose: () => void }) {
           </button>
         </>
       )}
-    </Sheet>
+    </Dialog>
   );
 }
 

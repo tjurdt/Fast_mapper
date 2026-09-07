@@ -46,14 +46,39 @@ export function drawOverlayLayer(ctx: CanvasRenderingContext2D, scene: Scene, di
   drawHighlight(ctx, scene, dims);
   drawDragRect(ctx, scene, dims);
   drawGhostCut(ctx, scene, dims);
+  drawCutHandles(ctx, scene, dims);
 }
 
 function drawSelection(ctx: CanvasRenderingContext2D, scene: Scene): void {
   if (!scene.selection.size) return;
-  ctx.strokeStyle = "#b5401f";
   for (const k of scene.selection) {
-    const q = scene.geo.keyQuad(k);
+    const q = scene.geo.selectionQuad(k, scene.selectionShapes.get(k));
     if (q) fillQuad(ctx, q, hexA("#e2603f", 0.35));
+  }
+}
+
+function drawCutHandles(ctx: CanvasRenderingContext2D, scene: Scene, dims: SceneDims): void {
+  const cut = scene.editingCut;
+  if (!cut) return;
+  const ax = cut.ax * dims.cw;
+  const ay = cut.ay * dims.ch;
+  const bx = cut.bx * dims.cw;
+  const by = cut.by * dims.ch;
+  ctx.strokeStyle = "#d64f27";
+  ctx.lineWidth = Math.max(1.2, dims.cw * 0.2);
+  ctx.setLineDash([]);
+  ctx.beginPath();
+  ctx.moveTo(ax, ay);
+  ctx.lineTo(bx, by);
+  ctx.stroke();
+  ctx.fillStyle = "#d64f27";
+  for (const [hx, hy] of [
+    [ax, ay],
+    [bx, by],
+  ] as const) {
+    ctx.beginPath();
+    ctx.arc(hx, hy, Math.max(2, dims.cw * 0.55), 0, 7);
+    ctx.fill();
   }
 }
 

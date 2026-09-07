@@ -96,6 +96,24 @@ export class MapGeometry {
     ];
   }
 
+  /** 選取高亮用的四邊形：有裁切形狀就用它，否則同 keyQuad。 */
+  selectionQuad(k: CellKey, shape?: readonly (readonly [number, number])[] | null): Point[] | null {
+    if (shape && shape.length >= 3) {
+      const [r, c] = keyRC(k);
+      return shape.map((p) => [(c + p[0]) * this.cw, (r + p[1]) * this.ch] as Point);
+    }
+    if (shape && shape.length < 3) {
+      const [r, c] = keyRC(k);
+      return [
+        [c * this.cw, r * this.ch],
+        [(c + 1) * this.cw, r * this.ch],
+        [(c + 1) * this.cw, (r + 1) * this.ch],
+        [c * this.cw, (r + 1) * this.ch],
+      ];
+    }
+    return this.keyQuad(k);
+  }
+
   keyCenter(k: CellKey): Point | null {
     const q = this.keyQuad(k);
     if (!q) return null;
@@ -350,6 +368,16 @@ export class MapGeometry {
       }
     }
     return out;
+  }
+
+  /** 靠近某條切線端點時回傳 "a" / "b"；否則 null。 */
+  cutHandleNear(cutId: string, x: number, y: number, tol: number): "a" | "b" | null {
+    const g = this.cutGeom(cutId);
+    if (!g) return null;
+    const da = Math.hypot(x - g.ax, y - g.ay);
+    const db = Math.hypot(x - g.bx, y - g.by);
+    if (Math.min(da, db) > tol) return null;
+    return da <= db ? "a" : "b";
   }
 
   /** 靠近某條切線的 cut id（tol 為影像單位容差）；沒有則 null。 */

@@ -50,18 +50,19 @@ describe("store bootstrap", () => {
     delete (globalThis as Record<string, unknown>).localStorage;
     store._setAdapterForTests(new MemoryAdapter());
     await store.createFromTemplate("blank-grid");
+    const base = store.project.value!.doc.categories.length;
 
     store.editDoc((doc) => {
-      doc.categories.push({ id: "c1", name: "A", color: "#111" });
+      doc.categories.push({ id: "cX", name: "A", color: "#111" });
       return doc;
     });
-    expect(store.project.value?.doc.categories.length).toBe(1);
+    expect(store.project.value?.doc.categories.length).toBe(base + 1);
     expect(store.canUndo.value).toBe(true);
 
     store.undo();
-    expect(store.project.value?.doc.categories.length).toBe(0);
+    expect(store.project.value?.doc.categories.length).toBe(base);
     store.redo();
-    expect(store.project.value?.doc.categories.length).toBe(1);
+    expect(store.project.value?.doc.categories.length).toBe(base + 1);
   });
 
   it("numbers 計算隨文件更新", async () => {
@@ -69,7 +70,6 @@ describe("store bootstrap", () => {
     store._setAdapterForTests(new MemoryAdapter());
     await store.createFromTemplate("blank-grid");
     store.editDoc((doc) => {
-      doc.categories.push({ id: "c1", name: "A", color: "#111" });
       doc.features.push({ id: "f1", name: "一", category: "c1" });
       doc.features.push({ id: "f2", name: "二", category: "c1" });
       doc.cells["0_0"] = { feature: "f1" };

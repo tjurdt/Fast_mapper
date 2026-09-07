@@ -63,6 +63,13 @@ export function attachGestures(target: HTMLElement, handlers: GestureHandlers): 
   };
 
   const onDown = (e: PointerEvent) => {
+    // 忽略落在地圖上懸浮控制項（動作列、縮放堆疊…）上的指標事件
+    if (
+      (e.target as HTMLElement | null)?.closest?.(
+        "button, input, select, a, label, .zoomstack, .maphint, .actionbar, .actionbar-wrap, .targetbar, .movepad-float",
+      )
+    )
+      return;
     target.setPointerCapture(e.pointerId);
     pts.set(e.pointerId, rel(e));
     if (pts.size === 2) {

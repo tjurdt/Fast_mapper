@@ -22,18 +22,31 @@ export const zhHant = {
   "editor.backToHub": "切換地圖",
 
   "tool.select": "選取",
+  "tool.paint": "筆刷",
   "tool.cut": "切線／牆",
   "tool.inspect": "檢視",
+
+  "hint.select": "點按多選・拖曳框選・雙指縮放",
+  "hint.paint": "先點一個區域當筆刷目標，再點格加入／移出",
+  "hint.cut": "拖曳畫牆・點牆編輯・點封閉空白處全選",
+
+  "zoom.in": "放大",
+  "zoom.out": "縮小",
+  "zoom.fit": "全覽",
+  "panel.toggle": "清單／圖例",
 
   "view.actual": "實際",
   "view.plan": "底圖",
 
-  "sel.count": "已選 {n} 格",
+  "sel.count": "{n} 格",
   "sel.assign": "指定{feature}",
   "sel.erase": "清除",
   "sel.move": "移動",
+  "sel.done": "完成",
   "sel.clear": "取消選取",
   "sel.moveHint": "每按一次移動一格，只移動實際分類與{feature}。",
+
+  "paint.hint": "點格加入／移出",
 
   "assign.title": "指定{category}與{feature}",
   "assign.category": "{category}",
@@ -52,7 +65,10 @@ export const zhHant = {
   "cell.save": "儲存",
 
   "cut.title": "切線設定",
-  "cut.depth": "帶深度",
+  "cut.open": "透明",
+  "cut.depthUp": "增加深度",
+  "cut.depthDown": "減少深度",
+  "cut.depth": "深度",
   "cut.side": "展開方向",
   "cut.side.-1": "上側",
   "cut.side.1": "下側",
@@ -70,6 +86,7 @@ export const zhHant = {
   "list.empty": "尚無{feature}。框選格子後指定分類即可建立。",
   "list.search": "搜尋編號或名稱",
   "list.edit": "編輯",
+  "list.brush": "設為筆刷目標",
   "list.rename": "{feature}名稱",
   "list.category": "{category}",
   "list.delete": "刪除此{feature}",
@@ -103,6 +120,7 @@ export const zhHant = {
   "common.close": "關閉",
   "common.cancel": "取消",
   "common.ok": "確定",
+  "common.done": "完成",
 } as const;
 
 export type MessageKey = keyof typeof zhHant;

@@ -114,12 +114,26 @@
   主 bundle ~210KB → ~108KB；只在建立該範本 / 匯入 <v4 舊存檔時載入
 - README 補完；`legacy/README.md` 說明保留原因（不參與建置，僅作對照）
 
-## Phase 4 暫緩項（獨立小任務，隨時可補）
+## Phase 8 — Phase 4 補完 + UI 重新設計（桌機優先，模仿原版）✅
 
-- 封閉區洪水框選（legacy `selectEnclosedAt`）→ `core/enclosed.ts` + `cut` 工具 onTap
-- 斜切格外形編輯 —— `setCellShape` 已有純函式，缺工具 UI
-- 切線端點拖曳把手 —— `moveCutEndpoint` 已有，缺 `cut` 工具的 handle 手勢
-- 「目標區域筆刷」模式 —— `toggleFeatureCell` 已有，缺一個 `paint` 工具
+- **封閉區洪水框選**：`src/core/enclosed.ts`（移植 `selectEnclosedAt`）；`cut` 工具
+  點封閉空白處 → 選整塊、邊界格自動斜切；`assignCells` 套用 `shapes` → `cell.poly`
+- **切線端點拖曳把手**：`geo.cutHandleNear` + `cut` 工具 `onDragStart` 判定；
+  編輯中畫端點圓點
+- **筆刷模式**：`paint` 工具 + `activeFeatureId`；點區域設目標，點/拖曳格子加入/移出
+- **UI 重新設計**（`src/ui/` 大改）：
+  - 桌機格狀版面：深色 header（含 實際/底圖 seg + undo/redo）→ toolbar → 地圖 + **右側常駐側欄**（清單/圖例）
+  - 地圖上**懸浮控制項**：`ZoomStack`（右上）、`MapHint`（左上 pill，隨工具變）、
+    `ActionBar`（下方懸浮，選取→指定/移動/清除/完成；切線→循環鈕 + 深度 stepper；
+    筆刷→ targetbar），色彩標記（橘=指定、深紅=刪除、青=完成）
+  - `CycleButton`（點一下循環，取代小下拉）、conic-gradient `LegendIcon`
+  - sheets → `Dialog`（置中懸浮，非下方捲上來）
+  - 手機：側欄變底部抽屜，右下 FAB 開合
+  - `gestures.ts` 忽略落在懸浮控制項上的指標事件
+- **移除東港華僑市場範本**：`TEMPLATES` 只留空白網格 / 底圖描繪；`donggangMarket.ts`
+  僅保留給 legacy 匯入。空白範本改附 3 個起始分類 + 2 個規劃層
+- `tests/` —— 共 82 個測試（+6：enclosed、shapes）
+- 瀏覽器實測（桌機 + 手機 + 深色）：四項功能 + 新版面皆正常，無 error
 
 ## 驗證清單
 

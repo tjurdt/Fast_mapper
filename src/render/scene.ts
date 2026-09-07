@@ -1,4 +1,4 @@
-import type { CellKey, MapDoc } from "../core/types";
+import type { CellKey, CellPoly, Cut, MapDoc } from "../core/types";
 import type { MapGeometry } from "../core/geometry";
 import type { ViewSettings } from "../model/schema";
 
@@ -17,6 +17,10 @@ export interface Scene {
   dragRect: readonly [number, number, number, number] | null;
   /** 正在拉的幽靈切線（格為單位 [ax,ay,bx,by]）。 */
   ghostCut: readonly [number, number, number, number] | null;
+  /** 封閉區框選的裁切形狀。 */
+  selectionShapes: ReadonlyMap<CellKey, CellPoly | null>;
+  /** 正在編輯的切線（畫出端點把手）。 */
+  editingCut: Cut | null;
 }
 
 export interface SceneDims {

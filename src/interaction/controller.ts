@@ -74,6 +74,8 @@ export class InteractionController {
       geo,
       view: p.view,
       selection: store.selection.value,
+      editingCutId: store.editingCutId.value,
+      activeFeatureId: store.activeFeatureId.value,
       resolve: (gp) => this.resolveRaw(gp, geo, p.view.view),
       hitTolerance: () => {
         const k = this.renderer.viewport.viewK() || 1;
@@ -107,6 +109,12 @@ export class InteractionController {
     inspectFeature: (id) => store.inspectFeature(id),
     addWall: (seg) => store.addWallSegment(seg),
     beginEditCut: (id) => store.beginEditCut(id),
+    moveCutEndpoint: (id, end, x, y) => store.moveCutEndpointTo(id, end, x, y),
+    selectEnclosed: (x, y) => store.selectEnclosed(x, y),
+    setActiveFeature: (id) => store.setActiveFeature(id),
+    paintCell: (k) => store.paintCell(k),
+    paintRect: (rect, erase) => store.paintRect(rect, erase),
+    toast: (msg) => store.uiEvents.emit("toast", msg),
     openAssignSheet: () => store.uiEvents.emit("assign-sheet"),
     openCellDetail: (k) => store.uiEvents.emit("cell-detail", k),
   };

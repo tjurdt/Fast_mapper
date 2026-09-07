@@ -1,10 +1,13 @@
 import type { Template } from "./types";
 import { blankGridTemplate, blankImageTemplate } from "./blank";
-import { donggangMarketTemplate } from "./donggangMarket";
 
 export type { Template } from "./types";
 
-export const TEMPLATES: Template[] = [blankGridTemplate, blankImageTemplate, donggangMarketTemplate];
+/**
+ * 新專案可選的範本。東港華僑市場**不在此清單**——它是特定場域，不適合當通用起點；
+ * 其資料模組（`donggangMarket.ts`）只保留給 legacy localStorage 匯入用。
+ */
+export const TEMPLATES: Template[] = [blankGridTemplate, blankImageTemplate];
 
 export function templateById(id: string): Template | undefined {
   return TEMPLATES.find((t) => t.id === id);

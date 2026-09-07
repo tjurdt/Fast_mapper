@@ -141,10 +141,12 @@ export function SettingsSheet({
   onClose,
   onCats,
   onBaseImage,
+  onExport,
 }: {
   onClose: () => void;
   onCats: () => void;
   onBaseImage: () => void;
+  onExport: () => void;
 }) {
   const p = store.project.value!;
   const v = p.view;
@@ -209,6 +211,7 @@ export function SettingsSheet({
       <div class="btnrow">
         <button onClick={onCats}>{t("settings.cats")}</button>
         <button onClick={onBaseImage}>{t("baseimg.title")}</button>
+        <button onClick={onExport}>{t("settings.export")}</button>
       </div>
       <div class="btnrow">
         <button onClick={() => downloadJson(store.exportProjectJson(), p.name)}>
@@ -282,6 +285,82 @@ export function CategoryModal({ onClose }: { onClose: () => void }) {
         ))}
       </ul>
       <button onClick={add}>{t("cats.add")}</button>
+    </Sheet>
+  );
+}
+
+// ---- 匯出 ----
+
+export function ExportSheet({ onClose }: { onClose: () => void }) {
+  const [mode, setMode] = useState<"plan" | "overlay" | "actual">("overlay");
+  const [baseOpacity, setBaseOpacity] = useState(90);
+  const [includeList, setIncludeList] = useState(true);
+  const [omitLabels, setOmitLabels] = useState(false);
+  const [busy, setBusy] = useState("");
+
+  const run = async (fmt: "png" | "svg" | "pdf" | "xlsx") => {
+    setBusy(fmt);
+    const ok = await store.exportMap(fmt, { mode, baseOpacity, includeList, omitLabels });
+    setBusy("");
+    if (!ok) alert("匯出失敗");
+  };
+
+  return (
+    <Sheet title={t("settings.export")} onClose={onClose}>
+      <div class="seg">
+        {(["plan", "overlay", "actual"] as const).map((m) => (
+          <button key={m} class={mode === m ? "on" : ""} onClick={() => setMode(m)}>
+            {{ plan: "只底圖", overlay: "底圖+實際", actual: "只實際" }[m]}
+          </button>
+        ))}
+      </div>
+      {mode !== "actual" && (
+        <label class="fieldrow">
+          <span>{mode === "plan" ? tv("legend.plan") : t("baseimg.opacity")}</span>
+          <input
+            type="range"
+            min="0"
+            max="100"
+            value={baseOpacity}
+            onInput={(e) => setBaseOpacity(Number((e.target as HTMLInputElement).value))}
+          />
+        </label>
+      )}
+      {mode !== "plan" && (
+        <>
+          <label class="check">
+            <input
+              type="checkbox"
+              checked={omitLabels}
+              onChange={(e) => setOmitLabels((e.target as HTMLInputElement).checked)}
+            />
+            不畫編號
+          </label>
+          <label class="check">
+            <input
+              type="checkbox"
+              checked={includeList && !omitLabels}
+              disabled={omitLabels}
+              onChange={(e) => setIncludeList((e.target as HTMLInputElement).checked)}
+            />
+            圖片下方附對照清單
+          </label>
+        </>
+      )}
+      <div class="btnrow">
+        <button disabled={!!busy} onClick={() => run("png")}>
+          {busy === "png" ? "…" : "PNG"}
+        </button>
+        <button disabled={!!busy} onClick={() => run("svg")}>
+          {busy === "svg" ? "…" : "SVG"}
+        </button>
+        <button disabled={!!busy} onClick={() => run("pdf")}>
+          {busy === "pdf" ? "…" : "PDF"}
+        </button>
+        <button disabled={!!busy} onClick={() => run("xlsx")}>
+          {busy === "xlsx" ? "…" : "Excel"}
+        </button>
+      </div>
     </Sheet>
   );
 }

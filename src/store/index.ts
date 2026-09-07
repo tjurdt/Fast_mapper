@@ -42,6 +42,7 @@ import {
   type MoveResult,
 } from "../model/edits";
 import type { Scene } from "../render/scene";
+import { exportImage, exportXlsx, downloadFile, type ExportOptions } from "../export";
 
 export { uiEvents } from "./events";
 
@@ -348,6 +349,27 @@ export function setBaseImageTransform(
       doc.baseImage = { ...doc.baseImage, transform: { ...doc.baseImage.transform, ...patch } };
     return doc;
   });
+}
+
+// 匯出圖片 / Excel
+export async function exportMap(
+  format: "png" | "svg" | "pdf" | "xlsx",
+  opts: Partial<ExportOptions> = {},
+): Promise<boolean> {
+  const p = project.value;
+  const geo = geometry.value;
+  if (!p || !geo) return false;
+  try {
+    const file =
+      format === "xlsx"
+        ? exportXlsx(p, geo, numbers.value)
+        : await exportImage(p, geo, numbers.value, format, opts);
+    downloadFile(file);
+    return true;
+  } catch (e) {
+    console.error(e);
+    return false;
+  }
 }
 
 // JSON 備份 / 匯入

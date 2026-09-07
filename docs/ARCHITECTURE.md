@@ -74,10 +74,11 @@ core/        純網域邏輯：幾何、band、編號、taxonomy。零 DOM、零
 
 ### 新增一種匯出格式
 
-1. 在 `src/export/` 新增 `<format>.ts`，輸入 `MapDoc` + `MapGeometry` + 選項，
-   輸出 bytes / 字串。
-2. 不 import `render/`、`store/`、`ui/`。共用的合成邏輯放 `export/composite.ts`。
-3. 在匯出 sheet 的選項清單加一項。
+1. 在 `src/export/` 新增 `<format>.ts`，輸入 `MapDoc`、`MapGeometry`、`ExportLayout`
+   與選項，輸出 bytes / 字串。
+2. 可 import `core/` 與 `render/primitives.ts`（共用繪圖基元，確保匯出與畫面一致）；
+   **不** import `store/` 或 `ui/`。
+3. 在 `src/export/index.ts` 接上、在 `ExportSheet` 加一顆按鈕。
 
 ### 改資料結構（schema）
 

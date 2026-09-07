@@ -92,9 +92,18 @@
   清單顯示編號、地圖畫出區域 → 開設定 / 分類管理，全程 vocabulary 生效，無 error
 - 68 個測試（UI 不寫單元測試）
 
-## Phase 6 — export/ ⬜
+## Phase 6 — export/ ✅
 
-- 移植 zip / xlsx / pdf / svg / png / composite
+- `src/render/primitives.ts` —— 抽出地圖繪圖基元（plan/actual fill、格線、band、
+  邊界、牆、標籤），螢幕 `layers.ts` 與匯出 `composite.ts` 共用 → 匯出與畫面一致
+- `src/export/` —— `layout`（版面計算、feature 排序、換行）、`composite`（canvas
+  合成：地圖 + 圖例 + 對照清單）、`svg`（向量，含 band 遮罩）、`zip`（crc32 +
+  store ZIP）、`xlsx`（inline-string 工作表）、`pdf`（單頁 JPEG）、`rows`、
+  `index`（`exportImage` / `exportXlsx` / `downloadFile`）
+- `src/core/geometry.ts` —— `featureAnchor`（對照表首格位置）
+- `src/store` —— `exportMap(format, opts)`；`src/ui/sheets.tsx` —— `ExportSheet`
+- 瀏覽器實測：PNG / SVG / PDF / Excel 四種格式皆正確下載，圖例 + 對照清單齊全，無 error
+- `tests/` —— 共 78 個測試（+10：crc32 向量、zip/xlsx/pdf 簽章、layout、svg、rows）
 
 ## Phase 7 — 收尾 ⬜
 

@@ -230,6 +230,19 @@ export class MapGeometry {
       .filter((p): p is Point => !!p);
   }
 
+  /** feature 的「首格」位置 [row, col]（最小 row，再最小 col），給匯出對照表用。 */
+  featureAnchor(id: string, keys?: CellKey[]): [number, number] | null {
+    let best: [number, number] | null = null;
+    for (const k of keys ?? this.featureKeys(id)) {
+      const ctr = this.keyCenter(k);
+      if (!ctr) continue;
+      const r = ctr[1] / this.ch - 0.5;
+      const c = ctr[0] / this.cw - 0.5;
+      if (!best || r < best[0] || (r === best[0] && c < best[1])) best = [r, c];
+    }
+    return best;
+  }
+
   // ---- 命中測試 ----
 
   regularFeatureAtPoint(x: number, y: number): string | null {

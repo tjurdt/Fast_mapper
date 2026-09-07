@@ -1,0 +1,97 @@
+:root {
+  color-scheme: light dark;
+  --bg: #eef1f0;
+  --panel: #fff;
+  --ink: #0e3b43;
+  --text: #1c2b2e;
+  --muted: #5f7377;
+  --line: #d3dbdc;
+  --stage: #e9edec;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #10201f;
+    --panel: #16302e;
+    --ink: #7fd8cf;
+    --text: #e6f2f0;
+    --muted: #9fb6b3;
+    --line: #244440;
+    --stage: #0d1a19;
+  }
+}
+
+* {
+  box-sizing: border-box;
+  -webkit-tap-highlight-color: transparent;
+}
+html,
+body {
+  margin: 0;
+  height: 100%;
+}
+body {
+  font-family:
+    "Noto Sans TC",
+    -apple-system,
+    BlinkMacSystemFont,
+    "Segoe UI",
+    system-ui,
+    "Microsoft JhengHei",
+    sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  line-height: 1.5;
+  overflow: hidden;
+}
+#app,
+.appshell {
+  height: 100dvh;
+}
+.appshell {
+  display: flex;
+  flex-direction: column;
+}
+
+.topbar {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: baseline;
+  gap: 0.75rem;
+  padding: 0.5rem 0.9rem;
+  background: var(--panel);
+  border-bottom: 1px solid var(--line);
+}
+.topbar strong {
+  color: var(--ink);
+}
+.topbar .meta {
+  color: var(--muted);
+  font-size: 0.82rem;
+}
+
+.stagewrap {
+  position: relative;
+  flex: 1 1 auto;
+  overflow: hidden;
+  background: var(--stage);
+  touch-action: none;
+  min-height: 0;
+}
+.stage {
+  position: absolute;
+  inset: 0;
+  transform-origin: 0 0;
+  will-change: transform;
+}
+.stage canvas {
+  position: absolute;
+  top: 0;
+  left: 0;
+  display: block;
+}
+#base {
+  z-index: 1;
+}
+#overlay {
+  z-index: 2;
+}

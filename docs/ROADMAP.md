@@ -256,6 +256,22 @@
 - 實測（4× CPU throttle 模擬中階手機、5148 格 / 143 店家 / 40 切線）：
   物件移動 ~325ms（原 ~950ms）、端點拖曳 ~32fps（原 ~3fps）、載入 ~800ms
 
+## Phase 15 — JSON 內嵌底圖 + 斜格選取標註 + 貼上位置標記 + 端點犧牲方向 ✅
+
+- **匯出 JSON 內嵌底圖圖片**：`exportProjectJson()` 改 async，把底圖 blob 轉 data URI
+  放進 `assets`；`importProjectJson` 讀 `assets` 還原成 blob（同一 `blobId`）。
+  沒帶圖的參照會被清掉，不會卡在載入
+- **「選取」模式選牆時，牆的斜格也塗上選取色**（`drawSelectedCuts` 加 band 格填色）
+  —— 跟一般格一樣被標註
+- **複製 → 貼上流程**：進入時清掉舊錨點；必須先在地圖點一個位置（畫面出現橘色
+  十字準心標記 `scene.pasteMarker`），「貼上」在標記前是 disabled（顯示「先點位置」）；
+  貼上位置＝標記格的左上角
+- **檢視模式收合不再閃**：`revealFeatureInList(null)` 先發 `panel-close` 讓抽屜開始關，
+  手機延遲 260ms（動畫時間）才清 filter；桌機即時
+- **切線端點拖曳縮短時**：斜格內容依「世界座標」重新定位到新的帶格 —— 落在被拉近
+  的那個端點附近、超出新帶範圍的內容才被犧牲（原本一律犧牲 b 端附近）
+- `tests/` —— 98 個測試（+2）
+
 ## 驗證清單
 
 - [ ] 舊 `grid-market-v4` localStorage 內容 → 自動匯入為「東港華僑市場」專案，

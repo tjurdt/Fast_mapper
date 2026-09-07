@@ -25,6 +25,8 @@ export interface Scene {
   editingCut: Cut | null;
   /** 拖曳端點時的即時預覽線（格為單位 [ax,ay,bx,by]）—— 不進文件、不重算幾何。 */
   cutDragPreview: readonly [number, number, number, number] | null;
+  /** 「選取」模式貼上流程：標記的貼上位置 [row, col]。 */
+  pasteMarker: readonly [number, number] | null;
 }
 
 export interface SceneDims {

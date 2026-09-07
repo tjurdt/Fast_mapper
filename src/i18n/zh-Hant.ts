@@ -49,8 +49,10 @@ export const zhHant = {
   "sel.clear": "取消選取",
   "sel.empty": "點牆或區域來選取",
   "sel.paste": "貼上",
+  "sel.pastePick": "先點位置",
   "sel.pasteCancel": "取消複製",
-  "sel.pasteHint": "點一個格子當貼上位置，再按「貼上」",
+  "sel.pasteHint": "先在地圖點一個格子當貼上位置（左上角），再按「貼上」",
+  "sel.pasteReady": "已標記貼上位置・可再點別處調整・按「貼上」完成",
 
   "offset.title": "位移",
   "offset.h": "水平（＋右／−左）",

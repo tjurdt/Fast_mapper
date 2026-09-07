@@ -86,12 +86,20 @@ export const pasteMode = signal(false);
 /** 進入貼上流程：把目前選取存進剪貼簿。 */
 export function startPasteMode(): boolean {
   if (!clipboardCopy(false)) return false;
-  pasteMode.value = true;
+  batch(() => {
+    pasteMode.value = true;
+    pasteAnchor.value = null; // 進入貼上流程 → 先清掉舊錨點，逼使用者點一個位置
+  });
   return true;
 }
 export function exitPasteMode(): void {
-  pasteMode.value = false;
+  batch(() => {
+    pasteMode.value = false;
+    pasteAnchor.value = null;
+  });
 }
+/** 是否已標記貼上位置。 */
+export const hasPasteAnchor = computed(() => pasteMode.value && pasteAnchor.value !== null);
 
 export function setTool(id: string): void {
   if (activeToolId.value === id) return;
@@ -101,11 +109,8 @@ export function setTool(id: string): void {
   editingCutId.value = null;
   ghostCut.value = null;
   activeFeatureId.value = null;
-  inspectedFeature.value = null;
-  if (listReveal.value !== null) {
-    listReveal.value = null;
-    uiEvents.emit("panel-close");
-  }
+  if (listReveal.value !== null) revealFeatureInList(null);
+  else inspectedFeature.value = null;
 }
 
 /** 只影響渲染、不進歷史的暫時狀態（拖曳框、幽靈切線、正在編輯的切線）。 */
@@ -153,6 +158,7 @@ export const scene = computed<Scene | null>(() => {
     selectedCutIds: selectedCutIds.value,
     editingCut: editingCutId.value ? (p.doc.cuts.find((c) => c.id === editingCutId.value) ?? null) : null,
     cutDragPreview: cutDragPreview.value,
+    pasteMarker: pasteMode.value ? pasteAnchor.value : null,
   };
 });
 
@@ -424,10 +430,32 @@ export function inspectFeature(id: string | null): void {
 
 /** 檢視工具點到的店家：右側清單分頁篩出它（並在手機展開面板）；null 清除並收回。 */
 export const listReveal = signal<string | null>(null);
+let revealClearTimer: ReturnType<typeof setTimeout> | null = null;
 export function revealFeatureInList(id: string | null): void {
-  listReveal.value = id;
-  inspectedFeature.value = id;
-  uiEvents.emit(id ? "panel-open" : "panel-close");
+  if (revealClearTimer) {
+    clearTimeout(revealClearTimer);
+    revealClearTimer = null;
+  }
+  if (id) {
+    batch(() => {
+      listReveal.value = id;
+      inspectedFeature.value = id;
+    });
+    uiEvents.emit("panel-open");
+    return;
+  }
+  // 收合：先讓抽屜開始關（動畫），等它關完再清 filter，避免清單先展開再收合的閃動
+  uiEvents.emit("panel-close");
+  const mobile = typeof matchMedia === "function" && matchMedia("(max-width: 959px)").matches;
+  const clear = () => {
+    revealClearTimer = null;
+    batch(() => {
+      listReveal.value = null;
+      inspectedFeature.value = null;
+    });
+  };
+  if (mobile) revealClearTimer = setTimeout(clear, 260);
+  else clear();
 }
 
 // ---- 「選取」模式：整體移動 / 複製 / 刪除 / 剪貼簿 ----
@@ -607,8 +635,8 @@ export function clipboardCopy(cut: boolean): boolean {
 }
 
 export function clipboardPaste(): boolean {
-  if (!clipboard) return false;
-  const anchor = pasteAnchor.value ?? [1, 1];
+  if (!clipboard || !pasteAnchor.value) return false;
+  const anchor = pasteAnchor.value;
   let res: { cutIds: string[]; cellKeys: CellKey[] } = { cutIds: [], cellKeys: [] };
   editDoc((doc) => {
     res = pasteObjects(doc, clipboard!, anchor[0], anchor[1]);
@@ -786,11 +814,36 @@ export async function exportMap(
   }
 }
 
-// JSON 備份 / 匯入
-export function exportProjectJson(): string {
-  const p = project.value;
-  return p ? JSON.stringify(serializeProject(p), null, 2) : "{}";
+// JSON 備份 / 匯入 —— 底圖圖片一併以 data URI 內嵌在 `assets`
+function blobToDataUrl(blob: Blob): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const fr = new FileReader();
+    fr.onload = () => resolve(fr.result as string);
+    fr.onerror = () => reject(fr.error);
+    fr.readAsDataURL(blob);
+  });
 }
+function dataUrlToBlob(url: string): Blob {
+  const [head, b64] = url.split(",", 2);
+  const mime = /data:([^;]+)/.exec(head ?? "")?.[1] ?? "application/octet-stream";
+  const bin = atob(b64 ?? "");
+  const bytes = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+  return new Blob([bytes], { type: mime });
+}
+
+export async function exportProjectJson(): Promise<string> {
+  const p = project.value;
+  if (!p) return "{}";
+  const out = serializeProject(p) as Record<string, unknown>;
+  const blobId = p.doc.baseImage?.blobId;
+  if (blobId) {
+    const blob = await adapter.getBlob(blobId);
+    if (blob) out.assets = { [blobId]: await blobToDataUrl(blob) };
+  }
+  return JSON.stringify(out, null, 2);
+}
+
 export async function importProjectJson(text: string): Promise<boolean> {
   try {
     const raw = JSON.parse(text) as Record<string, unknown>;
@@ -799,6 +852,22 @@ export async function importProjectJson(text: string): Promise<boolean> {
       raw && typeof raw === "object" && !raw.doc && !raw.schemaVersion && raw.cells && raw.zones;
     const p = isLegacy ? await projectFromLegacyState(raw as LegacyState) : loadProject(raw);
     const fresh: Project = { ...p, id: createProject().id, updatedAt: Date.now() };
+
+    // 內嵌的底圖圖片 → 還原成 blob
+    const assets = (raw.assets ?? null) as Record<string, string> | null;
+    const bId = fresh.doc.baseImage?.blobId;
+    if (assets && bId && typeof assets[bId] === "string") {
+      try {
+        await adapter.putBlob(bId, dataUrlToBlob(assets[bId]));
+      } catch (e) {
+        console.warn("restore base image failed", e);
+        delete fresh.doc.baseImage;
+      }
+    } else if (bId && !isLegacy) {
+      // 有參照但沒帶圖 → 拿掉，免得畫面卡在載入
+      delete fresh.doc.baseImage;
+    }
+
     setProject(fresh);
     await persistNow();
     await refreshProjectList();

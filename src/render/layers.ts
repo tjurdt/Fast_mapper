@@ -56,11 +56,49 @@ export function drawInteractionLayer(ctx: CanvasRenderingContext2D, scene: Scene
   drawDragRect(ctx, scene, dims);
   drawGhostCut(ctx, scene, dims);
   drawCutHandles(ctx, scene, dims);
+  drawPasteMarker(ctx, scene, dims);
+}
+
+function drawPasteMarker(ctx: CanvasRenderingContext2D, scene: Scene, dims: SceneDims): void {
+  const m = scene.pasteMarker;
+  if (!m) return;
+  const x = m[1] * dims.cw;
+  const y = m[0] * dims.ch;
+  ctx.save();
+  ctx.fillStyle = hexA("#e2603f", 0.28);
+  ctx.fillRect(x, y, dims.cw, dims.ch);
+  ctx.strokeStyle = "#b5401f";
+  ctx.lineWidth = Math.max(1.4, dims.cw * 0.14);
+  ctx.setLineDash([]);
+  ctx.strokeRect(x, y, dims.cw, dims.ch);
+  // 十字準心
+  ctx.beginPath();
+  ctx.moveTo(x + dims.cw / 2, y - dims.ch * 0.5);
+  ctx.lineTo(x + dims.cw / 2, y + dims.ch * 1.5);
+  ctx.moveTo(x - dims.cw * 0.5, y + dims.ch / 2);
+  ctx.lineTo(x + dims.cw * 1.5, y + dims.ch / 2);
+  ctx.stroke();
+  ctx.restore();
 }
 
 function drawSelectedCuts(ctx: CanvasRenderingContext2D, scene: Scene, dims: SceneDims): void {
   if (!scene.selectedCutIds.size) return;
   ctx.save();
+
+  // 被選牆的斜格：跟一般格一樣塗上選取色
+  ctx.fillStyle = hexA("#e2603f", 0.35);
+  for (const k in scene.doc.cells) {
+    if (k.charCodeAt(0) !== 66) continue;
+    const cid = k.slice(1, k.indexOf("_", 1));
+    if (!scene.selectedCutIds.has(cid)) continue;
+    const q = scene.geo.keyQuad(k);
+    if (!q) continue;
+    ctx.beginPath();
+    q.forEach((pt, i) => (i ? ctx.lineTo(pt[0], pt[1]) : ctx.moveTo(pt[0], pt[1])));
+    ctx.closePath();
+    ctx.fill();
+  }
+
   ctx.strokeStyle = "#e2603f";
   ctx.lineCap = "round";
   ctx.lineWidth = Math.max(2, dims.cw * 0.5);

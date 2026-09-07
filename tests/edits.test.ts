@@ -10,6 +10,7 @@ import {
   deleteObjects,
   ensureFeatureRegions,
   eraseCells,
+  moveCutEndpoint,
   moveObjects,
   moveSelection,
   pasteObjects,
@@ -223,5 +224,43 @@ describe("setFeatureFacility", () => {
     expect(doc.features[0]!.facility).toBe("toilet");
     doc = setFeatureFacility(doc, id, null);
     expect(doc.features[0]!.facility).toBeUndefined();
+  });
+});
+
+describe("moveCutEndpoint：斜格內容依世界座標重新定位", () => {
+  it("把 a 端拉近時，犧牲的是靠近 a 端（正在移動）的斜格內容", () => {
+    // 水平切線 a=(2,10)→b=(22,10)，cellPx 10 → 影像 20..220，長 200，U=10 → k≈20 段
+    let doc = makeDoc({
+      grid: { w: 30, h: 20, cellPx: 10 },
+      cuts: [{ id: "w1", ax: 2, ay: 10, bx: 22, by: 10, side: 1, depth: 1, wall: true }],
+    });
+    // 第 0 段（靠 a）與第 18 段（靠 b）各放一個店家
+    doc.cells["Bw1_0_0"] = { cat: "c1", feature: "nearA" };
+    doc.cells["Bw1_18_0"] = { cat: "c1", feature: "nearB" };
+
+    // 把 a 端往 b 拉近 10 格（新 a=(12,10)）→ 線縮短一半
+    doc = moveCutEndpoint(doc, "w1", "a", 12, 10);
+
+    const keys = Object.keys(doc.cells).filter((k) => k.startsWith("Bw1_"));
+    const feats = new Set(keys.map((k) => doc.cells[k]!.feature));
+    expect(feats.has("nearB")).toBe(true); // 靠 b 端的保留
+    expect(feats.has("nearA")).toBe(false); // 靠 a 端（移動中）的被犧牲
+  });
+
+  it("拉長切線時斜格內容都保留、往 b 端延伸不影響靠 a 的內容", () => {
+    let doc = makeDoc({
+      grid: { w: 40, h: 20, cellPx: 10 },
+      cuts: [{ id: "w1", ax: 2, ay: 10, bx: 12, by: 10, side: 1, depth: 1, wall: true }],
+    });
+    doc.cells["Bw1_0_0"] = { cat: "c1", feature: "a" };
+    doc.cells["Bw1_8_0"] = { cat: "c1", feature: "b" };
+    doc = moveCutEndpoint(doc, "w1", "b", 30, 10); // 只把 b 端往外拉，不動 a 端
+    const feats = new Set(
+      Object.keys(doc.cells)
+        .filter((k) => k.startsWith("Bw1_"))
+        .map((k) => doc.cells[k]!.feature),
+    );
+    expect(feats.has("a")).toBe(true);
+    expect(feats.has("b")).toBe(true);
   });
 });

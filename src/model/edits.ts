@@ -5,9 +5,10 @@
  * cut sheet handlers。
  */
 import type { Cell, CellKey, CellPoly, Cut, Feature, MapDoc } from "../core/types";
-import { isBandKey, keyRC } from "../core/keys";
+import { bandKey, isBandKey, keyRC, parseBandKey } from "../core/keys";
 import { cellHidden } from "../core/cells";
 import { MapGeometry } from "../core/geometry";
+import { bandLocate, cutGeom } from "../core/bands";
 import { clamp } from "../core/poly";
 
 const UNNAMED_PREFIX = "未命名";
@@ -648,6 +649,30 @@ export function deleteCut(doc: MapDoc, id: string): MapDoc {
 export function moveCutEndpoint(doc: MapDoc, id: string, end: "a" | "b", x: number, y: number): MapDoc {
   const cut = cutById(doc, id);
   if (!cut) return doc;
+
+  const cw = doc.grid.cellPx;
+  const ch = doc.grid.cellPx;
+  const prefix = "B" + id + "_";
+
+  // 移動端點前，先記錄每個斜格「內容」+ 它的世界座標中心（用舊幾何）
+  const carried: { cx: number; cy: number; cell: Cell }[] = [];
+  if (cut.depth) {
+    const gOld = cutGeom(cut, cw, ch);
+    for (const k in doc.cells) {
+      if (!k.startsWith(prefix)) continue;
+      const b = parseBandKey(k);
+      // 舊 band 格中心（沿切線 u = (i+0.5)*step，法向 v = (j+0.5)*U）
+      const u = (b.i + 0.5) * gOld.step;
+      const v = (b.j + 0.5) * gOld.U;
+      carried.push({
+        cx: gOld.ax + gOld.ux * u + gOld.nx * v,
+        cy: gOld.ay + gOld.uy * u + gOld.ny * v,
+        cell: doc.cells[k]!,
+      });
+      delete doc.cells[k];
+    }
+  }
+
   if (end === "a") {
     cut.ax = x;
     cut.ay = y;
@@ -655,6 +680,19 @@ export function moveCutEndpoint(doc: MapDoc, id: string, end: "a" | "b", x: numb
     cut.bx = x;
     cut.by = y;
   }
+
+  // 移動端點後：把每個斜格內容依世界座標重新定位到新的 band 格
+  // 落在新帶範圍外的（通常在被拉近的那個端點附近）就被犧牲
+  if (cut.depth && carried.length) {
+    const gNew = cutGeom(cut, cw, ch);
+    for (const item of carried) {
+      const hit = bandLocate(gNew, item.cx, item.cy);
+      if (!hit) continue;
+      const nk = bandKey(id, hit.i, hit.j);
+      doc.cells[nk] = { ...(doc.cells[nk] ?? {}), ...item.cell };
+    }
+  }
+
   pruneBandCells(doc);
   return doc;
 }

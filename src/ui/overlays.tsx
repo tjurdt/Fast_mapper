@@ -25,6 +25,9 @@ export function ZoomStack({ onZoom, onFit }: { onZoom: (f: number) => void; onFi
 // ---- 地圖左上角提示 pill ----
 
 export function MapHint() {
+  if (store.pasteMode.value) {
+    return <div class="maphint">{store.hasPasteAnchor.value ? t("sel.pasteReady") : t("sel.pasteHint")}</div>;
+  }
   const tool = toolById(store.activeToolId.value);
   if (!tool.hintKey) return null;
   return <div class="maphint">{t(tool.hintKey as MessageKey)}</div>;
@@ -93,15 +96,18 @@ export function ActionBar({ onAssign, onOffset }: { onAssign: () => void; onOffs
 
     // 複製 → 貼上流程
     if (store.pasteMode.value) {
+      const ready = store.hasPasteAnchor.value;
       return (
         <div class="actionbar simple">
           <button
             class="assign"
+            disabled={!ready}
+            title={ready ? undefined : t("sel.pasteHint")}
             onClick={() => {
               if (store.clipboardPaste()) store.uiEvents.emit("toast", t("sel.paste"));
             }}
           >
-            {t("sel.paste")}
+            {ready ? t("sel.paste") : t("sel.pastePick")}
           </button>
           <button class="danger" onClick={() => store.exitPasteMode()}>
             {t("sel.pasteCancel")}

@@ -445,7 +445,7 @@ export function SettingsSheet({
         <button onClick={onExport}>{t("settings.export")}</button>
       </div>
       <div class="btnrow">
-        <button onClick={() => downloadJson(store.exportProjectJson(), p.name)}>
+        <button onClick={() => void store.exportProjectJson().then((j) => downloadJson(j, p.name))}>
           {t("settings.exportJson")}
         </button>
         <button onClick={() => pickJson(onClose)}>{t("settings.importJson")}</button>

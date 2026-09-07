@@ -2,6 +2,8 @@
 export type UiEventMap = {
   "assign-sheet": undefined;
   "cell-detail": string;
+  "feature-sheet": string;
+  "offset-sheet": undefined;
   "edit-cut": string;
   /** 聚焦某個命名區域（點清單項目時）。 */
   "focus-feature": string;

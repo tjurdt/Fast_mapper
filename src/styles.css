@@ -661,6 +661,12 @@ button.danger {
 .legend .lg-nm {
   flex: 1;
 }
+.fac-ic {
+  width: 1.1rem;
+  text-align: center;
+  flex: 0 0 auto;
+  font-size: 1.05rem;
+}
 
 /* ---- dialogs (置中懸浮) ---- */
 .dialog-scrim {
@@ -870,8 +876,101 @@ button.danger {
   }
 }
 
-/* 桌機：側欄可收合 */
+/* 桌機：放大字級與按鈕、側欄可收合 */
 @media (min-width: 960px) {
+  body {
+    font-size: 16px;
+  }
+  .topbar {
+    padding: 0.55rem 1rem;
+    gap: 0.55rem;
+  }
+  .topbar button.ghost {
+    font-size: 1.2rem;
+    padding: 0.45rem 0.7rem;
+  }
+  .proj-name {
+    font-size: 1.2rem;
+  }
+  .view-seg button {
+    padding: 0.5rem 1.2rem;
+    font-size: 1.02rem;
+  }
+  .toolbar {
+    padding: 0.7rem 1rem;
+    gap: 0.6rem;
+  }
+  .toolbar .tool {
+    padding: 0.7rem 1.5rem;
+    font-size: 1.1rem;
+    border-radius: 12px;
+  }
+  .zoomstack button {
+    width: 48px;
+    height: 46px;
+    font-size: 19px;
+  }
+  .maphint {
+    font-size: 14px;
+    padding: 7px 15px;
+  }
+  .actionbar {
+    gap: 12px;
+    bottom: 22px;
+  }
+  .actionbar > button {
+    padding: 0.8rem 1.6rem;
+    font-size: 1.12rem;
+    border-radius: 13px;
+  }
+  .actionbar .dirbtn {
+    padding: 0.7rem 1.2rem;
+    font-size: 1.35rem;
+  }
+  .actionbar .cyclebtn {
+    padding: 0.8rem 1.3rem;
+    font-size: 1.05rem;
+  }
+  .actionbar .depthctl button {
+    padding: 0.8rem 1rem;
+    font-size: 1.2rem;
+  }
+  .actionbar .depthctl span {
+    font-size: 1.05rem;
+  }
+  .sp-head .tab {
+    font-size: 1.05rem;
+    padding: 0.5rem 0.9rem;
+  }
+  .feat-list li {
+    padding: 0.6rem 0.55rem;
+  }
+  .feat-list .nm {
+    font-size: 1.05rem;
+  }
+  .numbadge {
+    min-width: 1.9rem;
+    height: 1.9rem;
+    font-size: 0.9rem;
+  }
+  .legend li,
+  .legend h4 {
+    font-size: 1.02rem;
+  }
+  .dialog {
+    width: min(34rem, 100%);
+  }
+  .dialog-head b {
+    font-size: 1.2rem;
+  }
+  .dialog-body,
+  .dialog-foot {
+    font-size: 1.02rem;
+  }
+  .dialog-foot button {
+    padding: 0.65rem 1.5rem;
+  }
+
   .sp-collapse {
     display: inline-flex;
   }

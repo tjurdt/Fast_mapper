@@ -19,6 +19,8 @@ export interface Scene {
   ghostCut: readonly [number, number, number, number] | null;
   /** 封閉區框選的裁切形狀。 */
   selectionShapes: ReadonlyMap<CellKey, CellPoly | null>;
+  /** 「選取」模式下選中的牆 / 切線 id。 */
+  selectedCutIds: ReadonlySet<string>;
   /** 正在編輯的切線（畫出端點把手）。 */
   editingCut: Cut | null;
 }

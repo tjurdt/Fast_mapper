@@ -11,6 +11,7 @@ import {
   drawPlanFill,
   drawWallLines,
 } from "../render/primitives";
+import { facilityById, FACILITIES } from "../facilities";
 import { EXPORT_COLS, type ExportLayout } from "./layout";
 
 type Ctx2D = CanvasRenderingContext2D;
@@ -59,29 +60,44 @@ export function renderComposite(
   if (opts.mode !== "plan" && !opts.omitLabels) {
     for (const f of layout.features) {
       const num = numbers[f.id];
-      if (!num) continue;
+      const icon = facilityById(f.facility)?.icon;
+      if (!num && !icon) continue;
+      const rr = geo.ch * 0.75;
       for (const [cx, cy] of geo.featureLabelAnchors(f.id)) {
-        const rr = geo.ch * 0.75;
-        ctx.fillStyle = "#0e3b43";
-        ctx.beginPath();
-        ctx.arc(cx, cy, rr, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.fillStyle = "#fff";
-        ctx.font = `700 ${geo.ch * 0.9}px 'Noto Sans TC',sans-serif`;
-        ctx.textAlign = "center";
-        ctx.textBaseline = "middle";
-        ctx.fillText(String(num), cx, cy + geo.ch * 0.03);
+        if (icon) {
+          ctx.fillStyle = "#fff";
+          ctx.strokeStyle = "rgba(14,59,67,.35)";
+          ctx.lineWidth = rr * 0.12;
+          ctx.beginPath();
+          ctx.arc(cx, cy, rr * 1.15, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.stroke();
+          ctx.font = `${rr * 1.6}px 'Noto Sans TC',sans-serif`;
+          ctx.textAlign = "center";
+          ctx.textBaseline = "middle";
+          ctx.fillText(icon, cx, cy + rr * 0.05);
+        } else {
+          ctx.fillStyle = "#0e3b43";
+          ctx.beginPath();
+          ctx.arc(cx, cy, rr, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.fillStyle = "#fff";
+          ctx.font = `700 ${geo.ch * 0.9}px 'Noto Sans TC',sans-serif`;
+          ctx.textAlign = "center";
+          ctx.textBaseline = "middle";
+          ctx.fillText(String(num), cx, cy + geo.ch * 0.03);
+        }
       }
     }
   }
   ctx.restore();
 
-  drawLegend(ctx, layout);
+  drawLegend(ctx, layout, doc);
   drawList(ctx, layout, catColor, new Map(doc.categories.map((c) => [c.id, c.name])), numbers);
   ctx.restore();
 }
 
-function drawLegend(ctx: Ctx2D, layout: ExportLayout): void {
+function drawLegend(ctx: Ctx2D, layout: ExportLayout, doc: MapDoc): void {
   const y = layout.mapH;
   ctx.fillStyle = "#fff";
   ctx.fillRect(0, y, layout.width, layout.legendH);
@@ -109,6 +125,27 @@ function drawLegend(ctx: Ctx2D, layout: ExportLayout): void {
     ctx.font = "600 21px 'Noto Sans TC',sans-serif";
     ctx.fillText(item.name, x + 41, yy + 2, colW - 49);
   });
+
+  // 設施 icon 圖例（若有）
+  const facs = FACILITIES.filter((fa) => doc.features.some((f) => f.facility === fa.id));
+  if (facs.length) {
+    const rows = Math.ceil(layout.legendItems.length / EXPORT_COLS);
+    let fy = y + 83 + rows * 48 + 8;
+    ctx.fillStyle = "#0e3b43";
+    ctx.font = "700 22px 'Noto Sans TC',sans-serif";
+    ctx.fillText("設施", 36, fy);
+    fy += 30;
+    facs.forEach((fa, i) => {
+      const x = 36 + (i % EXPORT_COLS) * colW;
+      const yy = fy + Math.floor(i / EXPORT_COLS) * 40;
+      ctx.font = "26px 'Noto Sans TC',sans-serif";
+      ctx.fillText(fa.icon, x, yy + 4);
+      ctx.fillStyle = "#203236";
+      ctx.font = "600 20px 'Noto Sans TC',sans-serif";
+      ctx.fillText(fa.label, x + 38, yy, colW - 46);
+      ctx.fillStyle = "#0e3b43";
+    });
+  }
 }
 
 function drawList(

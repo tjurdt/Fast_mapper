@@ -111,9 +111,15 @@ export class InteractionController {
     beginEditCut: (id) => store.beginEditCut(id),
     moveCutEndpoint: (id, end, x, y) => store.moveCutEndpointTo(id, end, x, y),
     selectEnclosed: (x, y) => store.selectEnclosed(x, y),
-    setActiveFeature: (id) => store.setActiveFeature(id),
-    paintCell: (k) => store.paintCell(k),
-    paintRect: (rect, erase) => store.paintRect(rect, erase),
+    focusFeature: (id) => store.uiEvents.emit("focus-feature", id),
+    toggleCutSelected: (id) => store.toggleCutSelected(id),
+    selectWholeFeature: (id, add) => store.selectWholeFeature(id, add),
+    objSelectRect: (rect, add) => store.objSelectRect(rect, add),
+    setPasteAnchor: (cell) => {
+      if (cell.charCodeAt(0) === 66) return; // band 格不當貼上錨點
+      const i = cell.indexOf("_");
+      store.setPasteAnchor([parseInt(cell.slice(0, i), 10), parseInt(cell.slice(i + 1), 10)]);
+    },
     toast: (msg) => store.uiEvents.emit("toast", msg),
     openAssignSheet: () => store.uiEvents.emit("assign-sheet"),
     openCellDetail: (k) => store.uiEvents.emit("cell-detail", k),

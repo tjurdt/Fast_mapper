@@ -24,26 +24,34 @@ import {
   addPlanLayer,
   addWall,
   assignCells,
+  buildClipboard,
+  copyObjects,
   copySelection,
   cycleCutSide,
   deleteCategory,
   deleteCut,
   deleteFeature,
+  deleteObjects,
   deletePlanLayer,
   eraseCells,
   moveCutEndpoint,
+  moveObjects,
   moveSelection,
+  pasteObjects,
   renameFeature,
   toggleFeatureCell,
   setFeatureCategory,
+  setFeatureFacility,
   setGridSize,
   stepCutDepth,
   toggleCutWall,
   updateCategory,
   updatePlanLayer,
   type AssignArgs,
+  type Clipboard,
   type MoveDir,
   type MoveResult,
+  type ObjectSelection,
 } from "../model/edits";
 import type { Scene } from "../render/scene";
 import { exportImage, exportXlsx, downloadFile, type ExportOptions } from "../export";
@@ -59,10 +67,17 @@ export const ready = signal(false);
 export const selection = signal<ReadonlySet<CellKey>>(new Set());
 /** 封閉區框選帶來的每格裁切形狀（跟 selection 平行）。 */
 export const selectionShapes = signal<ReadonlyMap<CellKey, CellPoly | null>>(new Map());
+/** 「選取」模式下被選中的牆 / 切線 id。 */
+export const selectedCutIds = signal<ReadonlySet<string>>(new Set());
 export const inspectedFeature = signal<string | null>(null);
-/** 筆刷工具的目標命名區域。 */
+/** 舊筆刷用的目標命名區域（保留供內部）。 */
 export const activeFeatureId = signal<string | null>(null);
-export const activeToolId = signal<string>("select");
+export const activeToolId = signal<string>("grid");
+/** 貼上錨點（「選取」模式最後點的格）。 */
+export const pasteAnchor = signal<[number, number] | null>(null);
+
+let clipboard: Clipboard | null = null;
+export const clipboardFilled = signal(false);
 
 export function setTool(id: string): void {
   if (activeToolId.value === id) return;
@@ -70,7 +85,8 @@ export function setTool(id: string): void {
   clearSelection();
   editingCutId.value = null;
   ghostCut.value = null;
-  if (id !== "paint") activeFeatureId.value = null;
+  activeFeatureId.value = null;
+  inspectedFeature.value = null;
 }
 
 /** 只影響渲染、不進歷史的暫時狀態（拖曳框、幽靈切線、正在編輯的切線）。 */
@@ -113,6 +129,7 @@ export const scene = computed<Scene | null>(() => {
     dragRect: dragRect.value,
     ghostCut: ghostCut.value,
     selectionShapes: selectionShapes.value,
+    selectedCutIds: selectedCutIds.value,
     editingCut: editingCutId.value ? (p.doc.cuts.find((c) => c.id === editingCutId.value) ?? null) : null,
   };
 });
@@ -220,6 +237,7 @@ export function setSelection(keys: Iterable<CellKey>): void {
 export function clearSelection(): void {
   if (selection.value.size) selection.value = new Set();
   if (selectionShapes.value.size) selectionShapes.value = new Map();
+  if (selectedCutIds.value.size) selectedCutIds.value = new Set();
 }
 
 export function toggleCell(k: CellKey): void {
@@ -312,12 +330,139 @@ export function inspectFeature(id: string | null): void {
   inspectedFeature.value = id;
 }
 
-// ---- 筆刷（目標命名區域）----
+// ---- 「選取」模式：整體移動 / 複製 / 刪除 / 剪貼簿 ----
+
+function currentObjSelection(): ObjectSelection {
+  return { cutIds: [...selectedCutIds.value], cellKeys: [...selection.value] };
+}
+function hasObjSelection(): boolean {
+  return selection.value.size > 0 || selectedCutIds.value.size > 0;
+}
+
+export function toggleCutSelected(id: string): void {
+  const next = new Set(selectedCutIds.value);
+  if (next.has(id)) next.delete(id);
+  else next.add(id);
+  selectedCutIds.value = next;
+}
+
+/** 選取整個命名區域的所有格；band 格所屬的牆也一起選。 */
+export function selectWholeFeature(id: string, additive: boolean): void {
+  const geo = geometry.value;
+  if (!geo) return;
+  const keys = geo.featureKeys(id);
+  const cells = additive ? new Set(selection.value) : new Set<CellKey>();
+  const cuts = additive ? new Set(selectedCutIds.value) : new Set<string>();
+  for (const k of keys) {
+    if (k.charCodeAt(0) === 66) cuts.add(k.slice(1, k.indexOf("_", 1)));
+    else cells.add(k);
+  }
+  batch(() => {
+    selection.value = cells;
+    selectedCutIds.value = cuts;
+  });
+}
+
+/** 框選：矩形內有實際標記的格 + 端點在矩形內的牆。 */
+export function objSelectRect(rect: readonly [number, number, number, number], additive: boolean): void {
+  const geo = geometry.value;
+  const p = project.value;
+  if (!geo || !p) return;
+  const cellKeys = geo
+    .cellsInRect(rect[0], rect[1], rect[2], rect[3], p.view.view === "actual")
+    .filter((k) => geo.cell(k)?.cat || geo.cell(k)?.feature);
+  const cutIds = geo.cutsInRect(rect[0], rect[1], rect[2], rect[3]);
+  batch(() => {
+    const cells = additive ? new Set(selection.value) : new Set<CellKey>();
+    for (const k of cellKeys) cells.add(k);
+    selection.value = cells;
+    const cuts = additive ? new Set(selectedCutIds.value) : new Set<string>();
+    for (const id of cutIds) cuts.add(id);
+    selectedCutIds.value = cuts;
+  });
+}
+
+export function setPasteAnchor(rowCol: [number, number] | null): void {
+  pasteAnchor.value = rowCol;
+}
+
+export function moveObjectsBy(dx: number, dy: number): { ok: boolean; reason?: string } {
+  if (!hasObjSelection()) return { ok: false, reason: "沒有選取物件" };
+  const sel = currentObjSelection();
+  let result: MoveResult = { ok: false };
+  editDoc((doc) => {
+    result = moveObjects(doc, sel, dx, dy);
+    return result.ok ? doc : undefined;
+  });
+  if (result.ok && result.keys) selection.value = new Set(result.keys);
+  return { ok: result.ok, ...(result.reason ? { reason: result.reason } : {}) };
+}
+
+export function copyObjectsBy(dx: number, dy: number): { ok: boolean; reason?: string } {
+  if (!hasObjSelection()) return { ok: false, reason: "沒有選取物件" };
+  const sel = currentObjSelection();
+  let res: { ok: boolean; reason?: string; cutIds: string[]; cellKeys: CellKey[] } = {
+    ok: false,
+    cutIds: [],
+    cellKeys: [],
+  };
+  editDoc((doc) => {
+    res = copyObjects(doc, sel, dx, dy);
+    return res.ok ? doc : undefined;
+  });
+  if (res.ok) {
+    batch(() => {
+      selection.value = new Set(res.cellKeys);
+      selectedCutIds.value = new Set(res.cutIds);
+    });
+  }
+  return { ok: res.ok, ...(res.reason ? { reason: res.reason } : {}) };
+}
+
+export function deleteObjectsAction(): void {
+  if (!hasObjSelection()) return;
+  const sel = currentObjSelection();
+  editDoc((doc) => deleteObjects(doc, sel));
+  clearSelection();
+}
+
+export function clipboardCopy(cut: boolean): boolean {
+  const p = project.value;
+  if (!p || !hasObjSelection()) return false;
+  clipboard = buildClipboard(p.doc, currentObjSelection());
+  clipboardFilled.value = !!clipboard;
+  if (cut && clipboard) {
+    const sel = currentObjSelection();
+    editDoc((doc) => deleteObjects(doc, sel));
+    clearSelection();
+  }
+  return !!clipboard;
+}
+
+export function clipboardPaste(): boolean {
+  if (!clipboard) return false;
+  const anchor = pasteAnchor.value ?? [1, 1];
+  let res: { cutIds: string[]; cellKeys: CellKey[] } = { cutIds: [], cellKeys: [] };
+  editDoc((doc) => {
+    res = pasteObjects(doc, clipboard!, anchor[0], anchor[1]);
+    return doc;
+  });
+  batch(() => {
+    selection.value = new Set(res.cellKeys);
+    selectedCutIds.value = new Set(res.cutIds);
+  });
+  return true;
+}
+
+export function setFeatureFacilityAction(id: string, facility: string | null): void {
+  editDoc((doc) => setFeatureFacility(doc, id, facility));
+}
+
+// ---- 舊筆刷（保留內部；UI 已改為「檢視」工具）----
 
 export function setActiveFeature(id: string | null): void {
   activeFeatureId.value = id;
   if (id) {
-    activeToolId.value = "paint";
     clearSelection();
     inspectedFeature.value = null;
   }

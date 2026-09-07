@@ -14,31 +14,37 @@ import {
   CategoryModal,
   BaseImageSheet,
   ExportSheet,
-  CopySheet,
+  OffsetSheet,
+  FeatureSheet,
 } from "./sheets";
 
-type SheetId = "assign" | "cell" | "settings" | "cats" | "baseimg" | "export" | "copy" | null;
+type SheetId = "assign" | "cell" | "settings" | "cats" | "baseimg" | "export" | "offset" | "feature" | null;
 
 export function Editor() {
   const [sheet, setSheet] = useState<SheetId>(null);
   const [cellKey, setCellKey] = useState<string | null>(null);
+  const [featureId, setFeatureId] = useState<string | null>(null);
   const [panelOpen, setPanelOpen] = useState(false);
 
   useEffect(() => {
-    const offAssign = uiEvents.on("assign-sheet", () => setSheet("assign"));
-    const offCell = uiEvents.on("cell-detail", (k) => {
-      setCellKey(k);
-      setSheet("cell");
-    });
-    return () => {
-      offAssign();
-      offCell();
-    };
+    const offs = [
+      uiEvents.on("assign-sheet", () => setSheet("assign")),
+      uiEvents.on("cell-detail", (k) => {
+        setCellKey(k);
+        setSheet("cell");
+      }),
+      uiEvents.on("feature-sheet", (id) => {
+        setFeatureId(id);
+        setSheet("feature");
+      }),
+      uiEvents.on("offset-sheet", () => setSheet("offset")),
+    ];
+    return () => offs.forEach((o) => o());
   }, []);
 
   const close = () => setSheet(null);
   const barActive =
-    store.selection.value.size > 0 || !!store.editingCutId.value || !!store.activeFeatureId.value;
+    store.selection.value.size > 0 || store.selectedCutIds.value.size > 0 || !!store.editingCutId.value;
 
   return (
     <div class="appshell">
@@ -46,7 +52,7 @@ export function Editor() {
       <div class="workspace">
         <div class="workmain">
           <Toolbar />
-          <MapStage onAssign={() => setSheet("assign")} onCopy={() => setSheet("copy")} />
+          <MapStage onAssign={() => setSheet("assign")} onOffset={() => setSheet("offset")} />
         </div>
         <div class={panelOpen ? "sidewrap open" : "sidewrap"}>
           <SidePanel onClosePanel={() => setPanelOpen(false)} />
@@ -67,7 +73,8 @@ export function Editor() {
       <ToastHost />
 
       {sheet === "assign" && <AssignSheet onClose={close} />}
-      {sheet === "copy" && <CopySheet onClose={close} />}
+      {sheet === "offset" && <OffsetSheet onClose={close} />}
+      {sheet === "feature" && featureId && <FeatureSheet id={featureId} onClose={close} />}
       {sheet === "cell" && cellKey && <CellDetailSheet cellKey={cellKey} onClose={close} />}
       {sheet === "settings" && (
         <SettingsSheet

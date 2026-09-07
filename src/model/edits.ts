@@ -236,6 +236,241 @@ export function copySelection(doc: MapDoc, keys: CellKey[], dr: number, dc: numb
   return { ok: true, keys: dest };
 }
 
+// ---- 物件選取模式：整體移動 / 複製 / 刪除（牆 + 其斜格 + 格上的內容）----
+
+export interface ObjectSelection {
+  cutIds: string[];
+  cellKeys: CellKey[];
+}
+
+function bandCutId(k: CellKey): string {
+  return k.slice(1, k.indexOf("_", 1));
+}
+
+function outOfGrid(x: number, y: number, geo: MapGeometry): boolean {
+  return x < 0 || x > geo.gridW || y < 0 || y > geo.gridH;
+}
+
+/** 把選取的牆與格子整體位移 (dx, dy) 格。牆的斜格與其內容會跟著牆移動。 */
+export function moveObjects(doc: MapDoc, sel: ObjectSelection, dx: number, dy: number): MoveResult {
+  const geo = new MapGeometry(doc);
+  const cuts = doc.cuts.filter((c) => sel.cutIds.includes(c.id));
+  const gridKeys = sel.cellKeys.filter((k) => !isBandKey(k));
+  if (!cuts.length && !gridKeys.length) return { ok: false, reason: "沒有選取物件" };
+
+  for (const c of cuts) {
+    if (outOfGrid(c.ax + dx, c.ay + dy, geo) || outOfGrid(c.bx + dx, c.by + dy, geo))
+      return { ok: false, reason: "牆會超出網格" };
+  }
+  for (const k of gridKeys) {
+    const [r, c] = keyRC(k);
+    if (r + dy < 0 || r + dy >= geo.gridH || c + dx < 0 || c + dx >= geo.gridW)
+      return { ok: false, reason: "已到達網格邊界" };
+  }
+
+  for (const c of cuts) {
+    c.ax += dx;
+    c.ay += dy;
+    c.bx += dx;
+    c.by += dy;
+  }
+
+  const targets = new Map<CellKey, CellKey>();
+  const carried = new Map<CellKey, { cat?: string; feature?: string; poly?: CellPoly }>();
+  for (const k of gridKeys) {
+    const [r, c] = keyRC(k);
+    targets.set(k, `${r + dy}_${c + dx}`);
+    const d = doc.cells[k] ?? {};
+    carried.set(k, {
+      ...(d.cat ? { cat: d.cat } : {}),
+      ...(d.feature ? { feature: d.feature } : {}),
+      ...(d.poly ? { poly: d.poly } : {}),
+    });
+  }
+  const clearActual = (k: CellKey) => {
+    const d = doc.cells[k];
+    if (!d) return;
+    delete d.cat;
+    delete d.feature;
+    delete d.poly;
+    if (!d.plan) delete doc.cells[k];
+  };
+  for (const k of gridKeys) clearActual(k);
+  for (const k of gridKeys) clearActual(targets.get(k)!);
+  for (const k of gridKeys) {
+    const moved = carried.get(k)!;
+    if (!moved.cat && !moved.feature) continue;
+    const nk = targets.get(k)!;
+    doc.cells[nk] = { ...(doc.cells[nk] ?? {}), ...moved };
+  }
+
+  pruneBandCells(doc);
+  pruneOrphanFeatures(doc);
+  return { ok: true, keys: gridKeys.map((k) => targets.get(k)!) };
+}
+
+/** 複製選取的牆與格子到 (dx, dy) 位移處（來源保留）。回傳新選取（新牆 id + 新格鍵）。 */
+export function copyObjects(
+  doc: MapDoc,
+  sel: ObjectSelection,
+  dx: number,
+  dy: number,
+): { ok: boolean; reason?: string; cutIds: string[]; cellKeys: CellKey[] } {
+  const geo = new MapGeometry(doc);
+  const cuts = doc.cuts.filter((c) => sel.cutIds.includes(c.id));
+  const gridKeys = sel.cellKeys.filter((k) => !isBandKey(k));
+  if (!cuts.length && !gridKeys.length)
+    return { ok: false, reason: "沒有選取物件", cutIds: [], cellKeys: [] };
+
+  for (const c of cuts) {
+    if (outOfGrid(c.ax + dx, c.ay + dy, geo) || outOfGrid(c.bx + dx, c.by + dy, geo))
+      return { ok: false, reason: "牆會超出網格", cutIds: [], cellKeys: [] };
+  }
+  for (const k of gridKeys) {
+    const [r, c] = keyRC(k);
+    if (r + dy < 0 || r + dy >= geo.gridH || c + dx < 0 || c + dx >= geo.gridW)
+      return { ok: false, reason: "已到達網格邊界", cutIds: [], cellKeys: [] };
+  }
+
+  const newCutIds: string[] = [];
+  for (const c of cuts) {
+    const nid = rid("k");
+    doc.cuts.push({ ...c, id: nid, ax: c.ax + dx, ay: c.ay + dy, bx: c.bx + dx, by: c.by + dy });
+    newCutIds.push(nid);
+    for (const k in doc.cells) {
+      if (!isBandKey(k) || bandCutId(k) !== c.id) continue;
+      const rest = k.slice(("B" + c.id).length); // "_i_j"
+      doc.cells["B" + nid + rest] = { ...doc.cells[k]! };
+    }
+  }
+
+  const newCellKeys: CellKey[] = [];
+  for (const k of gridKeys) {
+    const [r, c] = keyRC(k);
+    const nk = `${r + dy}_${c + dx}`;
+    const src = doc.cells[k];
+    if (!src || (!src.cat && !src.feature)) continue;
+    const t: Cell = { ...(doc.cells[nk] ?? {}) };
+    if (src.cat) t.cat = src.cat;
+    if (src.feature) t.feature = src.feature;
+    if (src.poly) t.poly = src.poly;
+    else delete t.poly;
+    doc.cells[nk] = t;
+    newCellKeys.push(nk);
+  }
+
+  pruneBandCells(doc);
+  return { ok: true, cutIds: newCutIds, cellKeys: newCellKeys };
+}
+
+/** 刪除選取的物件：牆（連同斜格）+ 格上的實際標記。 */
+export function deleteObjects(doc: MapDoc, sel: ObjectSelection): MapDoc {
+  for (const id of sel.cutIds) deleteCut(doc, id);
+  const gridKeys = sel.cellKeys.filter((k) => !isBandKey(k));
+  eraseCells(doc, gridKeys);
+  return pruneUnnamedFeatures(doc);
+}
+
+// ---- 剪貼簿（Ctrl+C / X / V）----
+
+export interface ClipCut {
+  cut: Cut;
+  bands: Array<{ i: number; j: number; cell: Cell }>;
+}
+export interface ClipCell {
+  dr: number;
+  dc: number;
+  cat?: string;
+  feature?: string;
+  poly?: CellPoly;
+}
+export interface Clipboard {
+  cuts: ClipCut[];
+  cells: ClipCell[];
+}
+
+/** 從選取建立剪貼簿內容（座標相對於選取包圍盒左上角）。 */
+export function buildClipboard(doc: MapDoc, sel: ObjectSelection): Clipboard | null {
+  const cuts = doc.cuts.filter((c) => sel.cutIds.includes(c.id));
+  const gridKeys = sel.cellKeys.filter((k) => !isBandKey(k) && (doc.cells[k]?.cat || doc.cells[k]?.feature));
+  if (!cuts.length && !gridKeys.length) return null;
+
+  let minR = Infinity;
+  let minC = Infinity;
+  for (const k of gridKeys) {
+    const [r, c] = keyRC(k);
+    minR = Math.min(minR, r);
+    minC = Math.min(minC, c);
+  }
+  for (const c of cuts) {
+    minR = Math.min(minR, Math.floor(Math.min(c.ay, c.by)));
+    minC = Math.min(minC, Math.floor(Math.min(c.ax, c.bx)));
+  }
+
+  return {
+    cuts: cuts.map((c) => ({
+      cut: { ...c, ax: c.ax - minC, ay: c.ay - minR, bx: c.bx - minC, by: c.by - minR },
+      bands: Object.keys(doc.cells)
+        .filter((k) => isBandKey(k) && bandCutId(k) === c.id)
+        .map((k) => {
+          const p = k.slice(1).split("_");
+          return { i: Number(p[1]), j: Number(p[2]), cell: { ...doc.cells[k]! } };
+        }),
+    })),
+    cells: gridKeys.map((k) => {
+      const [r, c] = keyRC(k);
+      const d = doc.cells[k]!;
+      return {
+        dr: r - minR,
+        dc: c - minC,
+        ...(d.cat ? { cat: d.cat } : {}),
+        ...(d.feature ? { feature: d.feature } : {}),
+        ...(d.poly ? { poly: d.poly } : {}),
+      };
+    }),
+  };
+}
+
+/** 把剪貼簿內容貼到 (row, col) 為左上角處。回傳新選取。 */
+export function pasteObjects(
+  doc: MapDoc,
+  clip: Clipboard,
+  row: number,
+  col: number,
+): { cutIds: string[]; cellKeys: CellKey[] } {
+  const geo = new MapGeometry(doc);
+  const cutIds: string[] = [];
+  for (const cc of clip.cuts) {
+    const nid = rid("k");
+    doc.cuts.push({
+      ...cc.cut,
+      id: nid,
+      ax: cc.cut.ax + col,
+      ay: cc.cut.ay + row,
+      bx: cc.cut.bx + col,
+      by: cc.cut.by + row,
+    });
+    cutIds.push(nid);
+    for (const b of cc.bands) doc.cells[`B${nid}_${b.i}_${b.j}`] = { ...b.cell };
+  }
+  const cellKeys: CellKey[] = [];
+  for (const c of clip.cells) {
+    const r = row + c.dr;
+    const cc = col + c.dc;
+    if (r < 0 || r >= geo.gridH || cc < 0 || cc >= geo.gridW) continue;
+    const k = `${r}_${cc}`;
+    const t: Cell = { ...(doc.cells[k] ?? {}) };
+    if (c.cat) t.cat = c.cat;
+    if (c.feature) t.feature = c.feature;
+    if (c.poly) t.poly = c.poly;
+    else delete t.poly;
+    doc.cells[k] = t;
+    cellKeys.push(k);
+  }
+  pruneBandCells(doc);
+  return { cutIds, cellKeys };
+}
+
 // ---- 命名區域 CRUD ----
 
 export function renameFeature(doc: MapDoc, id: string, name: string): MapDoc {
@@ -249,6 +484,14 @@ export function setFeatureCategory(doc: MapDoc, id: string, categoryId: string):
   if (!f) return doc;
   f.category = categoryId;
   for (const k in doc.cells) if (doc.cells[k]!.feature === id) doc.cells[k]!.cat = categoryId;
+  return doc;
+}
+
+export function setFeatureFacility(doc: MapDoc, id: string, facility: string | null): MapDoc {
+  const f = featureById(doc, id);
+  if (!f) return doc;
+  if (facility) f.facility = facility;
+  else delete f.facility;
   return doc;
 }
 

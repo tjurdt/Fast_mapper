@@ -2,14 +2,20 @@ import { describe, expect, it } from "vitest";
 import {
   addWall,
   assignCells,
+  buildClipboard,
+  copyObjects,
   copySelection,
   deleteCut,
   deleteFeature,
+  deleteObjects,
   ensureFeatureRegions,
   eraseCells,
+  moveObjects,
   moveSelection,
+  pasteObjects,
   setCutDepth,
   setFeatureCategory,
+  setFeatureFacility,
 } from "../src/model/edits";
 import { makeDoc } from "./helpers";
 
@@ -154,5 +160,68 @@ describe("feature CRUD", () => {
     doc = deleteFeature(doc, fid);
     expect(doc.features).toHaveLength(0);
     expect(doc.cells["0_0"]).toBeUndefined();
+  });
+});
+
+describe("物件選取：moveObjects / copyObjects / deleteObjects", () => {
+  const build = () => {
+    let doc = makeDoc({
+      grid: { w: 12, h: 12, cellPx: 14 },
+      categories: [{ id: "c1", name: "A", color: "#111" }],
+      cuts: [{ id: "w1", ax: 2, ay: 2, bx: 6, by: 2, side: 1, depth: 0, wall: true }],
+    });
+    doc = assignCells(doc, ["3_3"], { categoryId: "c1", featureName: "x" });
+    return doc;
+  };
+
+  it("moveObjects 同時平移牆與格內容", () => {
+    const doc = build();
+    const r = moveObjects(doc, { cutIds: ["w1"], cellKeys: ["3_3"] }, 1, 1);
+    expect(r.ok).toBe(true);
+    expect(doc.cuts[0]).toMatchObject({ ax: 3, ay: 3, bx: 7, by: 3 });
+    expect(doc.cells["3_3"]).toBeUndefined();
+    expect(doc.cells["4_4"]!.feature).toBeDefined();
+  });
+
+  it("copyObjects 複製牆（新 id）與格內容、來源保留", () => {
+    const doc = build();
+    const r = copyObjects(doc, { cutIds: ["w1"], cellKeys: ["3_3"] }, 0, 4);
+    expect(r.ok).toBe(true);
+    expect(doc.cuts).toHaveLength(2);
+    expect(r.cutIds[0]).not.toBe("w1");
+    expect(doc.cells["3_3"]).toBeDefined();
+    expect(doc.cells["7_3"]!.feature).toBe(doc.cells["3_3"]!.feature);
+  });
+
+  it("deleteObjects 移除牆與格標記", () => {
+    const doc = build();
+    deleteObjects(doc, { cutIds: ["w1"], cellKeys: ["3_3"] });
+    expect(doc.cuts).toHaveLength(0);
+    expect(doc.cells["3_3"]).toBeUndefined();
+  });
+
+  it("剪貼簿：buildClipboard → pasteObjects", () => {
+    const doc = build();
+    const clip = buildClipboard(doc, { cutIds: ["w1"], cellKeys: ["3_3"] })!;
+    expect(clip).not.toBeNull();
+    const res = pasteObjects(doc, clip, 8, 5);
+    expect(res.cutIds).toHaveLength(1);
+    expect(res.cellKeys).toHaveLength(1);
+    // 貼到 (8,5) 為左上角；原本相對位置 (row3-2, col3-2)=(1,1) → (9,6)
+    expect(doc.cells["9_6"]!.feature).toBeDefined();
+  });
+});
+
+describe("setFeatureFacility", () => {
+  it("設定與清除設施", () => {
+    let doc = assignCells(makeDoc({ categories: [{ id: "c1", name: "A", color: "#111" }] }), ["0_0"], {
+      categoryId: "c1",
+      featureName: "x",
+    });
+    const id = doc.features[0]!.id;
+    doc = setFeatureFacility(doc, id, "toilet");
+    expect(doc.features[0]!.facility).toBe("toilet");
+    doc = setFeatureFacility(doc, id, null);
+    expect(doc.features[0]!.facility).toBeUndefined();
   });
 });

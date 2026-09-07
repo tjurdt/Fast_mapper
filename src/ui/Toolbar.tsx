@@ -4,9 +4,10 @@ import type { MessageKey } from "../i18n";
 import * as store from "../store";
 
 const ICON: Record<string, string> = {
-  select: "▦",
+  grid: "▦",
   cut: "／",
-  paint: "🖌",
+  inspect: "◎",
+  objselect: "❖",
 };
 
 export function Toolbar() {

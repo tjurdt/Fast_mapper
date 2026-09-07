@@ -4,6 +4,7 @@ import { tv } from "./vocab";
 import { Dialog } from "./Dialog";
 import * as store from "../store";
 import { isBandKey } from "../core/keys";
+import { FACILITIES } from "../facilities";
 
 // ---- 指定分類與命名區域 ----
 
@@ -57,46 +58,44 @@ export function AssignSheet({ onClose }: { onClose: () => void }) {
 
 // ---- 複製選取內容 ----
 
-export function CopySheet({ onClose }: { onClose: () => void }) {
-  const [dir, setDir] = useState<"up" | "down" | "left" | "right">("right");
-  const [dist, setDist] = useState(5);
+export function OffsetSheet({ onClose }: { onClose: () => void }) {
+  const [dx, setDx] = useState(5);
+  const [dy, setDy] = useState(0);
+  const run = (copy: boolean) => {
+    const r = copy ? store.copyObjectsBy(dx, dy) : store.moveObjectsBy(dx, dy);
+    if (!r.ok && r.reason) alert(r.reason);
+    onClose();
+  };
   return (
     <Dialog
-      title={t("copy.title")}
+      title={t("offset.title")}
       onClose={onClose}
       footer={
         <>
           <button onClick={onClose}>{t("common.cancel")}</button>
-          <button
-            class="primary"
-            onClick={() => {
-              const r = store.copySelectionBy(dir, dist);
-              if (!r.ok && r.reason) alert(r.reason);
-              onClose();
-            }}
-          >
-            {t("copy.apply")}
+          <button onClick={() => run(false)}>{t("offset.move")}</button>
+          <button class="primary" onClick={() => run(true)}>
+            {t("offset.copy")}
           </button>
         </>
       }
     >
       <label class="fieldrow">
-        <span>{t("copy.direction")}</span>
-        <select value={dir} onChange={(e) => setDir((e.target as HTMLSelectElement).value as typeof dir)}>
-          <option value="up">{t("copy.dir.up")}</option>
-          <option value="down">{t("copy.dir.down")}</option>
-          <option value="left">{t("copy.dir.left")}</option>
-          <option value="right">{t("copy.dir.right")}</option>
-        </select>
-      </label>
-      <label class="fieldrow">
-        <span>{t("copy.distance")}</span>
+        <span>{t("offset.h")}</span>
         <input
           class="field"
           type="number"
-          min="1"
-          value={dist}
-          onInput={(e) => setDist(Number((e.target as HTMLInputElement).value) || 1)}
+          value={dx}
+          onInput={(e) => setDx(Math.round(Number((e.target as HTMLInputElement).value) || 0))}
+        />
+      </label>
+      <label class="fieldrow">
+        <span>{t("offset.v")}</span>
+        <input
+          class="field"
+          type="number"
+          value={dy}
+          onInput={(e) => setDy(Math.round(Number((e.target as HTMLInputElement).value) || 0))}
         />
       </label>
     </Dialog>
@@ -175,6 +174,74 @@ export function CellDetailSheet({ cellKey, onClose }: { cellKey: string; onClose
           {p.doc.categories.map((c) => (
             <option key={c.id} value={c.id}>
               {c.name}
+            </option>
+          ))}
+        </select>
+      </label>
+    </Dialog>
+  );
+}
+
+// ---- 命名區域內容 ----
+
+export function FeatureSheet({ id, onClose }: { id: string; onClose: () => void }) {
+  const p = store.project.value!;
+  const f = p.doc.features.find((x) => x.id === id);
+  const [name, setName] = useState(f?.name ?? "");
+  const [cat, setCat] = useState(f?.category ?? "");
+  const [facility, setFacility] = useState(f?.facility ?? "");
+  if (!f) return null;
+
+  return (
+    <Dialog
+      title={tv("list.rename")}
+      onClose={onClose}
+      footer={
+        <>
+          <button
+            class="danger"
+            onClick={() => {
+              store.deleteFeatureAction(id);
+              onClose();
+            }}
+          >
+            {tv("list.delete")}
+          </button>
+          <button
+            class="primary"
+            onClick={() => {
+              if (name.trim() && name !== f.name) store.renameFeatureAction(id, name);
+              if (cat && cat !== f.category) store.setFeatureCategoryAction(id, cat);
+              if (facility !== (f.facility ?? "")) store.setFeatureFacilityAction(id, facility || null);
+              onClose();
+            }}
+          >
+            {t("cell.save")}
+          </button>
+        </>
+      }
+    >
+      <label class="fieldrow">
+        <span>{tv("assign.feature")}</span>
+        <input class="field" value={name} onInput={(e) => setName((e.target as HTMLInputElement).value)} />
+      </label>
+      <label class="fieldrow">
+        <span>{tv("list.category")}</span>
+        <select value={cat} onChange={(e) => setCat((e.target as HTMLSelectElement).value)}>
+          {p.doc.categories.map((c) => (
+            <option key={c.id} value={c.id}>
+              {c.name}
+            </option>
+          ))}
+        </select>
+      </label>
+      <label class="fieldrow">
+        <span>{t("facility.label")}</span>
+        <select value={facility} onChange={(e) => setFacility((e.target as HTMLSelectElement).value)}>
+          <option value="">{t("facility.none")}</option>
+          {FACILITIES.map((fa) => (
+            <option key={fa.id} value={fa.id}>
+              {fa.icon} {fa.label}
             </option>
           ))}
         </select>

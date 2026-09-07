@@ -182,39 +182,63 @@ export interface LabelOpts {
   numberRadius: number;
   numberFont: number;
   nameFont: number;
+  /** featureId → 設施 emoji（有的話畫在錨點，取代編號徽章的視覺主體）。 */
+  facilityIcon?: (featureId: string) => string | undefined;
 }
 
-/** 編號徽章 + 名稱。 */
+/** 編號徽章 / 設施 icon + 名稱。 */
 export function drawFeatureLabels(
   ctx: CanvasRenderingContext2D,
   geo: MapGeometry,
   numbers: Record<string, number>,
   opts: LabelOpts,
 ): void {
-  if (!opts.showLabels && !opts.showNames) return;
   const idx = geo.featureKeyIndex();
   for (const f of geo.doc.features) {
     const keys = idx.get(f.id);
     if (!keys) continue;
     const num = numbers[f.id];
+    const icon = opts.facilityIcon?.(f.id);
     for (const [cx, cy] of geo.featureLabelAnchors(f.id, keys)) {
-      if (opts.showLabels && num) {
+      const r = opts.numberRadius;
+      if (icon) {
+        ctx.fillStyle = "#fff";
+        ctx.strokeStyle = "rgba(14,59,67,.35)";
+        ctx.lineWidth = r * 0.12;
+        ctx.beginPath();
+        ctx.arc(cx, cy, r * 1.15, 0, 7);
+        ctx.fill();
+        ctx.stroke();
+        ctx.font = `${r * 1.6}px 'Noto Sans TC',sans-serif`;
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+        ctx.fillText(icon, cx, cy + r * 0.05);
+        if (opts.showLabels && num) {
+          ctx.fillStyle = "#0e3b43";
+          ctx.beginPath();
+          ctx.arc(cx + r * 1.1, cy - r * 1.1, r * 0.62, 0, 7);
+          ctx.fill();
+          ctx.fillStyle = "#fff";
+          ctx.font = `700 ${opts.numberFont * 0.72}px 'Noto Sans TC',sans-serif`;
+          ctx.fillText(String(num), cx + r * 1.1, cy - r * 1.05);
+        }
+      } else if (opts.showLabels && num) {
         ctx.fillStyle = "#0e3b43";
         ctx.beginPath();
-        ctx.arc(cx, cy, opts.numberRadius, 0, 7);
+        ctx.arc(cx, cy, r, 0, 7);
         ctx.fill();
         ctx.fillStyle = "#fff";
         ctx.font = `700 ${opts.numberFont}px 'Noto Sans TC',sans-serif`;
         ctx.textAlign = "center";
         ctx.textBaseline = "middle";
-        ctx.fillText(String(num), cx, cy + opts.numberRadius * 0.04);
+        ctx.fillText(String(num), cx, cy + r * 0.04);
       }
       if (opts.showNames) {
         ctx.fillStyle = "#10312f";
         ctx.font = `600 ${opts.nameFont}px 'Noto Sans TC',sans-serif`;
         ctx.textAlign = "center";
         ctx.textBaseline = "top";
-        ctx.fillText(f.name, cx, cy + opts.numberRadius * 1.1);
+        ctx.fillText(f.name, cx, cy + r * 1.3);
       }
     }
   }

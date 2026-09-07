@@ -30,6 +30,8 @@ export interface Feature {
   name: string;
   /** Category id */
   category: string;
+  /** 公共設施類型 id（見 src/facilities.ts）；設定後地圖與圖例會顯示 icon。 */
+  facility?: string;
 }
 
 /**

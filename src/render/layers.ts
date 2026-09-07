@@ -13,6 +13,7 @@ import {
   drawPlanFill,
   drawWallLines,
 } from "./primitives";
+import { facilityById } from "../facilities";
 import type { Scene, SceneDims } from "./scene";
 
 /** base：規劃分區底色（底圖圖片由 renderer 另外疊上）。 */
@@ -34,12 +35,14 @@ export function drawContentLayer(ctx: CanvasRenderingContext2D, scene: Scene, di
     drawBandCells(ctx, geo, a);
     if (view.showGrid) drawBandGridLines(ctx, doc, dims);
     drawFeatureBorders(ctx, geo, dims);
+    const facById = new Map(doc.features.map((f) => [f.id, f.facility]));
     drawFeatureLabels(ctx, geo, scene.numbers, {
       showLabels: view.showLabels,
       showNames: view.showNames,
       numberRadius: dims.ch * 0.7,
       numberFont: dims.ch * 0.85,
       nameFont: dims.ch * 0.75,
+      facilityIcon: (id) => facilityById(facById.get(id))?.icon,
     });
   }
   drawWallLines(ctx, doc, dims, scene.cutMode);
@@ -48,10 +51,28 @@ export function drawContentLayer(ctx: CanvasRenderingContext2D, scene: Scene, di
 /** interaction：選取 / 拖曳框 / 幽靈切線 / 端點把手 / 高亮。每幀重畫，但便宜。 */
 export function drawInteractionLayer(ctx: CanvasRenderingContext2D, scene: Scene, dims: SceneDims): void {
   drawSelection(ctx, scene);
+  drawSelectedCuts(ctx, scene, dims);
   drawHighlight(ctx, scene, dims);
   drawDragRect(ctx, scene, dims);
   drawGhostCut(ctx, scene, dims);
   drawCutHandles(ctx, scene, dims);
+}
+
+function drawSelectedCuts(ctx: CanvasRenderingContext2D, scene: Scene, dims: SceneDims): void {
+  if (!scene.selectedCutIds.size) return;
+  ctx.save();
+  ctx.strokeStyle = "#e2603f";
+  ctx.lineCap = "round";
+  ctx.lineWidth = Math.max(2, dims.cw * 0.5);
+  ctx.setLineDash([]);
+  for (const cut of scene.doc.cuts) {
+    if (!scene.selectedCutIds.has(cut.id)) continue;
+    ctx.beginPath();
+    ctx.moveTo(cut.ax * dims.cw, cut.ay * dims.ch);
+    ctx.lineTo(cut.bx * dims.cw, cut.by * dims.ch);
+    ctx.stroke();
+  }
+  ctx.restore();
 }
 
 function drawSelection(ctx: CanvasRenderingContext2D, scene: Scene): void {

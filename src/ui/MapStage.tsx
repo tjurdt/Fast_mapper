@@ -7,7 +7,7 @@ import { uiEvents } from "../store";
 import { ZoomStack, MapHint, ActionBar } from "./overlays";
 
 /** 承載三張 canvas + 地圖上的懸浮控制項。 */
-export function MapStage({ onAssign, onCopy }: { onAssign: () => void; onCopy: () => void }) {
+export function MapStage({ onAssign, onOffset }: { onAssign: () => void; onOffset: () => void }) {
   const wrapRef = useRef<HTMLDivElement>(null);
   const stageRef = useRef<HTMLDivElement>(null);
   const baseRef = useRef<HTMLCanvasElement>(null);
@@ -44,12 +44,34 @@ export function MapStage({ onAssign, onCopy }: { onAssign: () => void; onCopy: (
     const onKey = (e: KeyboardEvent) => {
       const tag = (e.target as HTMLElement | null)?.tagName;
       if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return;
+      const tool = store.activeToolId.value;
+      const hasSel = store.selection.value.size > 0 || store.selectedCutIds.value.size > 0;
+
       const dir = { ArrowUp: "up", ArrowDown: "down", ArrowLeft: "left", ArrowRight: "right" }[e.key] as
         "up" | "down" | "left" | "right" | undefined;
-      if (!dir || !store.selection.value.size) return;
-      e.preventDefault();
-      const r = store.moveSelectionBy(dir);
-      if (!r.ok && r.reason) uiEvents.emit("toast", r.reason);
+      if (dir && hasSel) {
+        e.preventDefault();
+        const r =
+          tool === "objselect"
+            ? store.moveObjectsBy(
+                ...({ up: [0, -1], down: [0, 1], left: [-1, 0], right: [1, 0] }[dir] as [number, number]),
+              )
+            : store.moveSelectionBy(dir);
+        if (!r.ok && r.reason) uiEvents.emit("toast", r.reason);
+        return;
+      }
+
+      if (tool !== "objselect") return;
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "c") {
+        if (store.clipboardCopy(false)) uiEvents.emit("toast", "已複製");
+      } else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "x") {
+        if (store.clipboardCopy(true)) uiEvents.emit("toast", "已剪下");
+      } else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "v") {
+        if (store.clipboardPaste()) uiEvents.emit("toast", "已貼上");
+      } else if ((e.key === "Delete" || e.key === "Backspace") && hasSel) {
+        e.preventDefault();
+        store.deleteObjectsAction();
+      }
     };
     window.addEventListener("keydown", onKey);
 
@@ -81,7 +103,7 @@ export function MapStage({ onAssign, onCopy }: { onAssign: () => void; onCopy: (
       </div>
       <MapHint />
       <ZoomStack onZoom={zoom} onFit={() => rendererRef.current?.fit()} />
-      <ActionBar onAssign={onAssign} onCopy={onCopy} />
+      <ActionBar onAssign={onAssign} onOffset={onOffset} />
     </div>
   );
 }

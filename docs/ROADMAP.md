@@ -153,6 +153,24 @@
   工具列可捲
 - `tests/` —— 85 個測試（+3）
 
+## Phase 10 — 物件選取模式 + 設施 icon ✅
+
+- **工具重整**：`選取`→`網格`、`線條`維持、`筆刷`移除改回`檢視`（原 inspect），
+  新增第四個 `選取` 工具（`objselect`，以「物件」為單位）
+- **`選取` 模式**（`src/interaction/tools/objselect.ts`）：
+  - 點牆 → 選整道牆（連同斜格與格上的內容）；點區域 → 選整個命名區域；拖曳框選
+  - 動作列：`↑ ↓ ← → | 位移 | 刪除 | 完成`（方向鍵也能移動）
+  - `位移` 對話框一次設定水平 + 垂直位移，可「移動」或「複製」
+  - 桌機 **Ctrl+C / Ctrl+X / Ctrl+V**（`clipboardCopy/Paste`，點另一處設貼上錨點）、
+    **Delete** 刪除物件
+- `src/model/edits.ts`：`moveObjects` / `copyObjects`（牆用新 id、斜格資料跟著複製）/
+  `deleteObjects` / `buildClipboard` / `pasteObjects`；`src/core/geometry.ts` `cutsInRect`
+- **設施 icon**（`src/facilities.ts`）：`Feature.facility` 欄位 + 14 種內建設施
+  （廁所🚻 / 哺乳室🍼 / 停車場🅿️ / 服務台ℹ️ …）。地圖在區域錨點畫 icon（編號縮成
+  角標）、圖例多「設施」區、`FeatureSheet` 可設定；PNG / SVG 匯出同步
+- **桌機字級 / 按鈕再放大**（`@media (min-width: 960px)` 專屬區塊）
+- `tests/` —— 90 個測試（+5）
+
 ## 驗證清單
 
 - [ ] 舊 `grid-market-v4` localStorage 內容 → 自動匯入為「東港華僑市場」專案，

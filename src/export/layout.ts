@@ -79,7 +79,9 @@ export function computeLayout(
 
   const legendItems: (Category | PlanLayer)[] = opts.mode === "plan" ? doc.planLayers : doc.categories;
   const legendRows = Math.max(1, Math.ceil(legendItems.length / EXPORT_COLS));
-  const legendH = Math.max(EXPORT_LEGEND_H, 83 + (legendRows - 1) * 48 + 36);
+  const facilityCount = new Set(doc.features.map((f) => f.facility).filter(Boolean)).size;
+  const facilityH = facilityCount ? 38 + Math.ceil(facilityCount / EXPORT_COLS) * 40 : 0;
+  const legendH = Math.max(EXPORT_LEGEND_H, 83 + (legendRows - 1) * 48 + 36) + facilityH;
 
   const listContentH = features.length
     ? Math.max(...listColumns.map((c) => c.reduce((s, r) => s + r.height, 0)))

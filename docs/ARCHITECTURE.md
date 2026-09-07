@@ -40,13 +40,13 @@ core/        純網域邏輯：幾何、band、編號、taxonomy。零 DOM、零
 
 一個「專案」= 一份 `MapDoc`（見 `src/core/types.ts`）+ 專案 metadata。
 
-| 概念     | 型別        | 舊名 | 說明                                                                     |
-| -------- | ----------- | ---- | ------------------------------------------------------------------------ |
-| 規劃層   | `PlanLayer` | zone | 原先規劃的底圖分區                                                       |
-| 實際分類 | `Category`  | cat  | 實地調查結果的上色分類                                                   |
-| 命名區域 | `Feature`   | shop | 由多個格子組成、會被編號的實體                                           |
-| 格子     | `Cell`      | cell | `{ plan?, cat?, feature?, poly? }`，鍵為 `"r_c"` 或 `"B<cutId>_<i>_<j>"` |
-| 切線／帶 | `Cut`       | cut  | 斜向分割線，可展開成對齊帶                                               |
+| 概念     | 型別        | 舊名 | 說明                                                                                     |
+| -------- | ----------- | ---- | ---------------------------------------------------------------------------------------- |
+| 規劃層   | `PlanLayer` | zone | 原先規劃的底圖分區                                                                       |
+| 實際分類 | `Category`  | cat  | 實地調查結果的上色分類                                                                   |
+| 命名區域 | `Feature`   | shop | 由多個格子組成、會被編號的實體；可選 `facility` 標記為公共設施（見 `src/facilities.ts`） |
+| 格子     | `Cell`      | cell | `{ plan?, cat?, feature?, poly? }`，鍵為 `"r_c"` 或 `"B<cutId>_<i>_<j>"`                 |
+| 切線／帶 | `Cut`       | cut  | 斜向分割線，可展開成對齊帶                                                               |
 
 **程式內部一律用中性名稱**。使用者看到的文字來自：
 
@@ -88,6 +88,12 @@ core/        純網域邏輯：幾何、band、編號、taxonomy。零 DOM、零
 3. 補一個測試：舊文件 → migrate → 斷言新文件。
 4. `document.ts` 會依序套用所有 migration。
 
+### 新增一種公共設施 icon
+
+在 `src/facilities.ts` 的 `FACILITIES` 加一項 `{ id, label, icon }`（icon 用單一
+emoji，canvas / SVG 匯出都吃得到）。地圖繪製、圖例、`FeatureSheet` 下拉、匯出會自動
+帶入。之後把 `label` 移到 i18n 即可多語系。
+
 ### 新增一個內建範本
 
 在 `src/templates/` 新增 `<name>.ts` 匯出一個 `Template`（含預設 `MapDoc` 與
@@ -98,8 +104,10 @@ core/        純網域邏輯：幾何、band、編號、taxonomy。零 DOM、零
 
 - `Editor` 用 CSS grid：深色 header ／ toolbar + 地圖 ／ 右側常駐側欄（`SidePanel`：
   清單 + 圖例分頁）。手機（<960px）側欄變底部抽屜，右下 `panel-fab` 開合。
+- 四個工具：`網格`（選格子→指定分類）、`線條`（畫牆/切線）、`檢視`（點格看歸屬）、
+  `選取`（以物件為單位：牆＋斜格＋內容一起移動/複製/刪除，桌機 Ctrl+C/X/V、Delete）。
 - 地圖上的控制項全部**懸浮**在 `.stagewrap` 上：`ZoomStack`、`MapHint`（隨工具換提示）、
-  `ActionBar`（選取/切線/筆刷三種變體，色彩標記按鈕）。
+  `ActionBar`（依模式切換變體，色彩標記按鈕，無外框）。
 - 選單 / 表單用 `Dialog`（置中懸浮，非 sheet）。少數離散選項用 `CycleButton`（點擊循環）。
 - `gestures.ts` 的 `onDown` 會忽略落在 `button/input/.zoomstack/.actionbar/...` 上的
   指標事件，讓懸浮控制項可正常點按。

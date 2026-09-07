@@ -399,6 +399,17 @@ export class MapGeometry {
     return da <= db ? "a" : "b";
   }
 
+  /** 端點落在影像矩形內的切線 id。 */
+  cutsInRect(x0: number, y0: number, x1: number, y1: number): string[] {
+    const inside = (x: number, y: number) => x >= x0 && x <= x1 && y >= y0 && y <= y1;
+    return this.doc.cuts
+      .filter((c) => {
+        const g = this.geomFor(c);
+        return inside(g.ax, g.ay) || inside(g.bx, g.by);
+      })
+      .map((c) => c.id);
+  }
+
   /** 靠近某條切線的 cut id（tol 為影像單位容差）；沒有則 null。 */
   cutNear(x: number, y: number, tol: number): string | null {
     let best: { id: string; d: number } | null = null;

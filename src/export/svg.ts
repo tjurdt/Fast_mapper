@@ -5,6 +5,7 @@ import { keyRC, isBandKey } from "../core/keys";
 import type { CellPoly, MapDoc, Point } from "../core/types";
 import type { MapGeometry } from "../core/geometry";
 import { xesc } from "./xlsx";
+import { facilityById, FACILITIES } from "../facilities";
 import { EXPORT_COLS, wrapText, type ExportLayout } from "./layout";
 import { WALL_STROKE } from "../render/primitives";
 
@@ -109,12 +110,19 @@ export function buildSvg(
   if (opts.mode !== "plan" && !opts.omitLabels) {
     for (const feat of layout.features) {
       const num = numbers[feat.id];
-      if (!num) continue;
+      const icon = facilityById(feat.facility)?.icon;
+      if (!num && !icon) continue;
       for (const [cx, cy] of geo.featureLabelAnchors(feat.id)) {
-        r +=
-          `<circle cx="${f1(cx)}" cy="${f1(cy)}" r="${f1(ch * 0.75)}" fill="#0e3b43"/>` +
-          `<text x="${f1(cx)}" y="${f1(cy)}" fill="#fff" font-size="${f1(ch * 0.9)}" font-weight="700" ` +
-          `text-anchor="middle" dominant-baseline="central">${num}</text>`;
+        if (icon) {
+          r +=
+            `<circle cx="${f1(cx)}" cy="${f1(cy)}" r="${f1(ch * 0.86)}" fill="#fff" stroke="#0e3b43" stroke-opacity=".35" stroke-width="${f1(ch * 0.08)}"/>` +
+            `<text x="${f1(cx)}" y="${f1(cy)}" font-size="${f1(ch * 1.2)}" text-anchor="middle" dominant-baseline="central">${icon}</text>`;
+        } else {
+          r +=
+            `<circle cx="${f1(cx)}" cy="${f1(cy)}" r="${f1(ch * 0.75)}" fill="#0e3b43"/>` +
+            `<text x="${f1(cx)}" y="${f1(cy)}" fill="#fff" font-size="${f1(ch * 0.9)}" font-weight="700" ` +
+            `text-anchor="middle" dominant-baseline="central">${num}</text>`;
+        }
       }
     }
   }
@@ -135,6 +143,20 @@ export function buildSvg(
       `<rect x="${f1(x)}" y="${f1(y - 21)}" width="29" height="29" rx="4" fill="${item.color}" stroke="#000" stroke-opacity=".22"/>` +
       `<text x="${f1(x + 41)}" y="${f1(y + 2)}" fill="#203236" font-size="21" font-weight="600">${xesc(item.name)}</text>`;
   });
+  const svgFacs = FACILITIES.filter((fa) => doc.features.some((f) => f.facility === fa.id));
+  if (svgFacs.length) {
+    const rows = Math.ceil(layout.legendItems.length / EXPORT_COLS);
+    let fy = ly + 83 + rows * 48 + 8;
+    r += `<text x="36" y="${fy}" fill="#0e3b43" font-size="22" font-weight="700">設施</text>`;
+    fy += 30;
+    svgFacs.forEach((fa, i) => {
+      const x = 36 + (i % EXPORT_COLS) * colW;
+      const y = fy + Math.floor(i / EXPORT_COLS) * 40;
+      r +=
+        `<text x="${f1(x)}" y="${f1(y + 4)}" font-size="26">${fa.icon}</text>` +
+        `<text x="${f1(x + 38)}" y="${f1(y)}" fill="#203236" font-size="20" font-weight="600">${xesc(fa.label)}</text>`;
+    });
+  }
 
   // 對照清單
   if (opts.includeList) {

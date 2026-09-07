@@ -44,9 +44,12 @@ export interface ToolActions {
   moveCutEndpoint(cutId: string, end: "a" | "b", x: number, y: number): void;
   /** 封閉區洪水框選；失敗回傳原因字串。 */
   selectEnclosed(x: number, y: number): { ok: boolean; reason?: string };
-  setActiveFeature(id: string | null): void;
-  paintCell(k: CellKey): void;
-  paintRect(rect: ImgRect, erase: boolean): void;
+  focusFeature(id: string): void;
+  /** 「選取」模式：切換牆的選取狀態 / 選整個命名區域 / 框選物件 / 記錄貼上錨點。 */
+  toggleCutSelected(cutId: string): void;
+  selectWholeFeature(id: string, additive: boolean): void;
+  objSelectRect(rect: ImgRect, additive: boolean): void;
+  setPasteAnchor(cell: CellKey): void;
   toast(message: string): void;
   /** 開啟指定分類 sheet。 */
   openAssignSheet(): void;

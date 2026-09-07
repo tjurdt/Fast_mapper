@@ -1,6 +1,4 @@
-import { useState } from "preact/hooks";
 import { t } from "../i18n";
-import { tv } from "./vocab";
 import * as store from "../store";
 import { toolById } from "../interaction";
 import type { MessageKey } from "../i18n";
@@ -34,27 +32,20 @@ export function MapHint() {
 
 // ---- 地圖下方懸浮動作列 ----
 
-const MOVE_DIRS = [
+const DIRS = [
   { dir: "up", label: "↑" },
   { dir: "down", label: "↓" },
   { dir: "left", label: "←" },
   { dir: "right", label: "→" },
 ] as const;
 
-export function ActionBar({ onAssign, onCopy }: { onAssign: () => void; onCopy: () => void }) {
-  const [moveMode, setMoveMode] = useState(false);
-  const p = store.project.value;
+export function ActionBar({ onAssign, onOffset }: { onAssign: () => void; onOffset: () => void }) {
+  const tool = store.activeToolId.value;
   const cut = store.scene.value?.editingCut ?? null;
-  const activeFeature = store.activeFeatureId.value
-    ? p?.doc.features.find((f) => f.id === store.activeFeatureId.value)
-    : null;
-  const selCount = store.selection.value.size;
+  const selCells = store.selection.value.size;
+  const selCuts = store.selectedCutIds.value.size;
 
-  const move = (dir: "up" | "down" | "left" | "right") => {
-    const r = store.moveSelectionBy(dir);
-    if (!r.ok && r.reason) store.uiEvents.emit("toast", r.reason);
-  };
-
+  // 切線編輯
   if (cut) {
     return (
       <div class="actionbar">
@@ -100,46 +91,46 @@ export function ActionBar({ onAssign, onCopy }: { onAssign: () => void; onCopy: 
     );
   }
 
-  if (activeFeature) {
-    return (
-      <div class="actionbar targetbar">
-        <span class="dot" />
-        <b>{activeFeature.name}</b>
-        <span class="hint">{tv("paint.hint")}</span>
-        <button class="go" onClick={() => store.setActiveFeature(null)}>
-          {t("common.done")}
-        </button>
-      </div>
-    );
-  }
-
-  if (selCount === 0) return null;
-
-  if (moveMode) {
+  // 「選取」模式（物件）
+  if (tool === "objselect") {
+    if (selCells === 0 && selCuts === 0) return null;
+    const move = (dir: "up" | "down" | "left" | "right") => {
+      const d: Record<typeof dir, [number, number]> = {
+        up: [0, -1],
+        down: [0, 1],
+        left: [-1, 0],
+        right: [1, 0],
+      };
+      const [dx, dy] = d[dir];
+      const r = store.moveObjectsBy(dx, dy);
+      if (!r.ok && r.reason) store.uiEvents.emit("toast", r.reason);
+    };
     return (
       <div class="actionbar">
-        {MOVE_DIRS.map((m) => (
+        {DIRS.map((m) => (
           <button key={m.dir} class="dirbtn" aria-label={m.dir} onClick={() => move(m.dir)}>
             {m.label}
           </button>
         ))}
-        <button class="assign" onClick={onCopy}>
-          {t("sel.copy")}
+        <button class="assign" onClick={onOffset}>
+          {t("offset.title")}
         </button>
-        <button class="go" onClick={() => setMoveMode(false)}>
-          {t("common.back")}
+        <button class="danger" onClick={() => store.deleteObjectsAction()}>
+          {t("sel.delete")}
+        </button>
+        <button class="go" onClick={() => store.clearSelection()}>
+          {t("sel.done")}
         </button>
       </div>
     );
   }
 
+  // 「網格」模式
+  if (selCells === 0) return null;
   return (
     <div class="actionbar">
       <button class="assign" onClick={onAssign}>
         {t("sel.edit")}
-      </button>
-      <button class="neutral" onClick={() => setMoveMode(true)}>
-        {t("sel.move")}
       </button>
       <button class="danger" onClick={() => store.eraseSelection()}>
         {t("sel.erase")}

@@ -4,6 +4,7 @@ import { tv } from "./vocab";
 import * as store from "../store";
 import { uiEvents } from "../store";
 import { LegendIcon } from "./widgets";
+import { facilityById, FACILITIES } from "../facilities";
 
 type Tab = "list" | "legend";
 
@@ -57,7 +58,7 @@ function FeatureList() {
   const focus = (id: string) => {
     const same = store.inspectedFeature.value === id;
     store.inspectFeature(same ? null : id);
-    if (!same) uiEvents.emit("focus-feature", id); // 只有這裡會 zoom 到特定物件
+    if (!same) uiEvents.emit("focus-feature", id); // 只有這裡會 zoom
   };
 
   return (
@@ -71,29 +72,25 @@ function FeatureList() {
       />
       <ul class="feat-list">
         {rows.map(({ f, n }) => {
-          const active = store.inspectedFeature.value === f.id || store.activeFeatureId.value === f.id;
+          const fac = facilityById(f.facility);
           return (
-            <li key={f.id} class={active ? "on" : ""} onClick={() => focus(f.id)}>
+            <li
+              key={f.id}
+              class={store.inspectedFeature.value === f.id ? "on" : ""}
+              onClick={() => focus(f.id)}
+            >
               <span class="numbadge">{n ?? "–"}</span>
               <span class="dot" style={{ background: catColor.get(f.category) ?? "#ccc" }} />
-              <span class="nm">{f.name}</span>
-              <button
-                class="icon"
-                aria-label={t("list.brush")}
-                title={t("list.brush")}
-                onClick={(e) => {
-                  e.stopPropagation();
-                  store.setActiveFeature(f.id);
-                }}
-              >
-                🖌
-              </button>
+              <span class="nm">
+                {fac ? fac.icon + " " : ""}
+                {f.name}
+              </span>
               <button
                 class="icon"
                 aria-label={t("list.edit")}
                 onClick={(e) => {
                   e.stopPropagation();
-                  editFeature(f.id);
+                  uiEvents.emit("feature-sheet", f.id);
                 }}
               >
                 ✎
@@ -106,18 +103,6 @@ function FeatureList() {
   );
 }
 
-function editFeature(id: string) {
-  const f = store.project.value!.doc.features.find((x) => x.id === id);
-  if (!f) return;
-  const name = prompt(tv("list.rename"), f.name);
-  if (name == null) return;
-  if (name.trim() === "") {
-    if (confirm(tv("list.delete") + "？")) store.deleteFeatureAction(id);
-    return;
-  }
-  store.renameFeatureAction(id, name);
-}
-
 function Legend() {
   const p = store.project.value!;
   const catCount: Record<string, number> = {};
@@ -127,6 +112,10 @@ function Legend() {
     if (d.cat) catCount[d.cat] = (catCount[d.cat] ?? 0) + 1;
     if (d.plan) planCount[d.plan] = (planCount[d.plan] ?? 0) + 1;
   }
+  const facCount: Record<string, number> = {};
+  for (const f of p.doc.features) if (f.facility) facCount[f.facility] = (facCount[f.facility] ?? 0) + 1;
+  const facs = FACILITIES.filter((fa) => facCount[fa.id]);
+
   return (
     <div class="sp-body legend">
       <h4>{tv("legend.plan")}</h4>
@@ -149,6 +138,20 @@ function Legend() {
           </li>
         ))}
       </ul>
+      {facs.length > 0 && (
+        <>
+          <h4>{t("legend.facility")}</h4>
+          <ul>
+            {facs.map((fa) => (
+              <li key={fa.id}>
+                <span class="fac-ic">{fa.icon}</span>
+                <span class="lg-nm">{fa.label}</span>
+                <span class="muted">{facCount[fa.id]}</span>
+              </li>
+            ))}
+          </ul>
+        </>
+      )}
     </div>
   );
 }

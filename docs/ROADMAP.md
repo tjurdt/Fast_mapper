@@ -105,10 +105,21 @@
 - 瀏覽器實測：PNG / SVG / PDF / Excel 四種格式皆正確下載，圖例 + 對照清單齊全，無 error
 - `tests/` —— 共 78 個測試（+10：crc32 向量、zip/xlsx/pdf 簽章、layout、svg、rows）
 
-## Phase 7 — 收尾 ⬜
+## Phase 7 — 收尾 ✅
 
-- PWA（離線）、`remote.ts` 介面定稿、README、ARCHITECTURE how-to 補完
-- 移除 `legacy/`（或永久保留作對照）
+- PWA：`vite-plugin-pwa` + manifest + 圖示（`public/icon-*.png`）+ service worker
+  precache + 離線 SPA 回退；`index.html` theme-color / apple-touch-icon
+- `src/persistence/remote.ts` —— 雲端同步 adapter 骨架（實作同一 `StorageAdapter` 介面）
+- **code-split**：donggang 2768 格底圖 JSON（cells + canonical）改動態 import，
+  主 bundle ~210KB → ~108KB；只在建立該範本 / 匯入 <v4 舊存檔時載入
+- README 補完；`legacy/README.md` 說明保留原因（不參與建置，僅作對照）
+
+## Phase 4 暫緩項（獨立小任務，隨時可補）
+
+- 封閉區洪水框選（legacy `selectEnclosedAt`）→ `core/enclosed.ts` + `cut` 工具 onTap
+- 斜切格外形編輯 —— `setCellShape` 已有純函式，缺工具 UI
+- 切線端點拖曳把手 —— `moveCutEndpoint` 已有，缺 `cut` 工具的 handle 手勢
+- 「目標區域筆刷」模式 —— `toggleFeatureCell` 已有，缺一個 `paint` 工具
 
 ## 驗證清單
 

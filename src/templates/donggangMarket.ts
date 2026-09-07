@@ -5,7 +5,6 @@
  */
 import type { Cell, Category, PlanLayer } from "../core/types";
 import type { Template } from "./types";
-import rawCells from "./donggang-market.cells.json";
 
 export const DONGGANG_PLAN_LAYERS: PlanLayer[] = [
   { id: "z1", name: "熟食區", color: "#ED7D31" },
@@ -39,11 +38,11 @@ export const LEGACY_CATEGORY_ALIASES: string[][] = [
   ["牆/外框", "牆壁"],
 ];
 
-export function donggangPlanCells(): Record<string, Cell> {
+/** 底圖格資料（~34KB）獨立 code-split，只在建立此範本時才載入。 */
+export async function donggangPlanCells(): Promise<Record<string, Cell>> {
+  const raw = (await import("./donggang-market.cells.json")).default as Record<string, { plan: string }>;
   const out: Record<string, Cell> = {};
-  for (const k in rawCells as Record<string, { plan: string }>) {
-    out[k] = { plan: (rawCells as Record<string, { plan: string }>)[k]!.plan };
-  }
+  for (const k in raw) out[k] = { plan: raw[k]!.plan };
   return out;
 }
 
@@ -51,14 +50,14 @@ export const donggangMarketTemplate: Template = {
   id: "donggang-market",
   title: "東港華僑市場",
   description: "原始範本：9 個規劃分區、既有攤位底圖，網格 156 × 54。",
-  build: () => ({
+  build: async () => ({
     name: "東港華僑市場",
     vocabulary: { planLayer: "規劃分區", category: "實際分類", feature: "店家" },
     doc: {
       grid: { w: 156, h: 54, cellPx: 14 },
       planLayers: DONGGANG_PLAN_LAYERS.map((z) => ({ ...z })),
       categories: DONGGANG_CATEGORIES.map((c) => ({ ...c })),
-      cells: donggangPlanCells(),
+      cells: await donggangPlanCells(),
     },
   }),
 };

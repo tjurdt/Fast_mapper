@@ -408,7 +408,7 @@ export async function openProject(id: string): Promise<boolean> {
 
 export async function createFromTemplate(templateId: string, name?: string): Promise<Project> {
   const t = templateById(templateId) ?? TEMPLATES[0]!;
-  const input = t.build();
+  const input = await t.build();
   const p = createProject({ ...input, ...(name ? { name } : {}) });
   setProject(p);
   await persistNow();
@@ -437,7 +437,7 @@ export async function bootstrap(): Promise<BootstrapResult> {
 
   const alreadyImported = await adapter.getMeta<boolean>(META_LEGACY_IMPORTED);
   if (!alreadyImported) {
-    const legacy = safeReadLegacy();
+    const legacy = await safeReadLegacy();
     if (legacy) {
       await adapter.saveProject(legacy);
       legacyImported = true;
@@ -458,9 +458,9 @@ export async function bootstrap(): Promise<BootstrapResult> {
   return { opened, legacyImported };
 }
 
-function safeReadLegacy(): Project | null {
+async function safeReadLegacy(): Promise<Project | null> {
   try {
-    return readLegacyProject();
+    return await readLegacyProject();
   } catch {
     return null;
   }

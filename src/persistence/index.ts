@@ -5,6 +5,7 @@ import { MemoryAdapter } from "./memory";
 export type { StorageAdapter, ProjectSummary } from "./adapter";
 export { IndexedDbAdapter } from "./indexeddb";
 export { MemoryAdapter } from "./memory";
+export { RemoteAdapter, type RemoteConfig } from "./remote";
 
 /** 選一個當前環境可用的儲存媒介。 */
 export function createStorageAdapter(): StorageAdapter {

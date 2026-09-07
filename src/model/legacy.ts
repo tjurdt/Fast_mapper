@@ -16,12 +16,22 @@ import {
   DONGGANG_PLAN_LAYERS,
   LEGACY_CATEGORY_ALIASES,
 } from "../templates/donggangMarket";
-import canonicalPlan from "../templates/donggang-market.canonical.json";
 
 export const LEGACY_LS_KEY = "grid-market-v4";
 
 const WALL_PLANS = new Set(["zw", "zf", "zs"]);
-const CANON: Record<string, string> = canonicalPlan;
+
+/** 港市場 canonical 底圖（含牆位置，~45KB）—— 只在匯入 taxonomyVersion < 4 的舊存檔時才載入。 */
+let canonCache: Record<string, string> | null = null;
+async function canonPlan(): Promise<Record<string, string>> {
+  if (!canonCache) {
+    canonCache = (await import("../templates/donggang-market.canonical.json")).default as Record<
+      string,
+      string
+    >;
+  }
+  return canonCache;
+}
 
 interface LegacyCat {
   id: string;
@@ -76,11 +86,13 @@ function buildCategoryMap(cats: LegacyCat[]): Record<string, string> {
  * 分類/分區固定為港市場正規表，牆壁 plan 收斂為 "zw"，
  * shop/cell 的分類 id 重新對應。
  */
-export function normalizeLegacyTaxonomy(state: LegacyState): LegacyState {
+export async function normalizeLegacyTaxonomy(state: LegacyState): Promise<LegacyState> {
   const version = state.taxonomyVersion ?? 0;
   const cells = state.cells ?? {};
 
   if (version === 4) return state;
+
+  const CANON = await canonPlan();
 
   if (version === 3) {
     for (const k in cells) {
@@ -118,8 +130,8 @@ export function normalizeLegacyTaxonomy(state: LegacyState): LegacyState {
 }
 
 /** legacy 狀態 → 新的 Project（schema v1）。 */
-export function projectFromLegacyState(raw: LegacyState): Project {
-  const state = normalizeLegacyTaxonomy(structuredClone(raw));
+export async function projectFromLegacyState(raw: LegacyState): Promise<Project> {
+  const state = await normalizeLegacyTaxonomy(structuredClone(raw));
 
   const cells: Record<string, Cell> = {};
   for (const k in state.cells ?? {}) {
@@ -168,7 +180,9 @@ export function projectFromLegacyState(raw: LegacyState): Project {
 }
 
 /** 從瀏覽器 localStorage 讀 legacy 存檔；沒有則回 null。 */
-export function readLegacyProject(storage: Pick<Storage, "getItem"> = localStorage): Project | null {
+export async function readLegacyProject(
+  storage: Pick<Storage, "getItem"> = localStorage,
+): Promise<Project | null> {
   let raw: string | null = null;
   try {
     raw = storage.getItem(LEGACY_LS_KEY);
@@ -176,11 +190,12 @@ export function readLegacyProject(storage: Pick<Storage, "getItem"> = localStora
     return null;
   }
   if (!raw) return null;
+  let parsed: LegacyState;
   try {
-    const parsed = JSON.parse(raw) as LegacyState;
-    if (!parsed || !parsed.cells || !parsed.zones) return null;
-    return projectFromLegacyState(parsed);
+    parsed = JSON.parse(raw) as LegacyState;
   } catch {
     return null;
   }
+  if (!parsed || !parsed.cells || !parsed.zones) return null;
+  return projectFromLegacyState(parsed);
 }

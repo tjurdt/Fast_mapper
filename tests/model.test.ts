@@ -118,8 +118,8 @@ describe("projectFromLegacyState", () => {
     cuts: [],
   };
 
-  it("shop → feature、牆壁 plan 被丟棄", () => {
-    const p = projectFromLegacyState(legacyV4);
+  it("shop → feature、牆壁 plan 被丟棄", async () => {
+    const p = await projectFromLegacyState(legacyV4);
     expect(p.name).toBe("東港華僑市場");
     expect(p.vocabulary.feature).toBe("店家");
     expect(p.doc.features).toEqual([{ id: "s1", name: "阿明", category: "c1" }]);
@@ -129,7 +129,7 @@ describe("projectFromLegacyState", () => {
     expect(p.schemaVersion).toBe(SCHEMA_VERSION);
   });
 
-  it("舊 taxonomy（version < 3）用別名對應分類", () => {
+  it("舊 taxonomy（version < 3）用別名對應分類", async () => {
     const old: LegacyState = {
       taxonomyVersion: 1,
       gridW: 156,
@@ -140,7 +140,7 @@ describe("projectFromLegacyState", () => {
       cells: { "5_5": { cat: "cX", shop: "s1" } },
       cuts: [],
     };
-    const p = projectFromLegacyState(old);
+    const p = await projectFromLegacyState(old);
     // 「黃區」→ 別名索引 3（第 4 組）→ c4
     expect(p.doc.features[0]!.category).toBe("c4");
     expect(p.doc.cells["5_5"]).toEqual({ cat: "c4", feature: "s1" });

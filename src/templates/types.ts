@@ -7,6 +7,6 @@ export interface Template {
   title: string;
   /** 一行說明。 */
   description: string;
-  /** 套用範本時傳給 createProject 的內容。 */
-  build(): NewProjectInput;
+  /** 套用範本時傳給 createProject 的內容。可為 async（大型範本資料 code-split）。 */
+  build(): NewProjectInput | Promise<NewProjectInput>;
 }

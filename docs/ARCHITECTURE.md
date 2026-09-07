@@ -105,9 +105,9 @@ core/        純網域邏輯：幾何、band、編號、taxonomy。零 DOM、零
 
 - 唯一狀態源：`src/store/`（signals）。元件用 `useSignal` / `computed` 訂閱。
 - 改文件一律走 `model/commands.ts`（順帶處理 undo/redo 快照與存檔防抖）。
-- 存取媒介：`persistence/adapter.ts` 的 `StorageAdapter`。目前只有
-  `indexeddb.ts`（多專案索引 + 文件 + 底圖 blob）。雲端同步日後實作
-  `remote.ts`，UI 不需改。
+- 存取媒介：`persistence/adapter.ts` 的 `StorageAdapter`。目前用
+  `indexeddb.ts`（多專案索引 + 文件 + 底圖 blob）。雲端同步：`remote.ts` 已有
+  骨架，實作同一介面即可，`createStorageAdapter()` 依登入狀態選用，UI / store 不需改。
 - `localStorage` 僅用於「單一瀏覽器的小便利」（記住上次開的專案、面板收合），
   一律包 try/catch。
 
@@ -129,6 +129,12 @@ core/        純網域邏輯：幾何、band、編號、taxonomy。零 DOM、零
 | `npm run preview`                 | 預覽 `dist/`             |
 
 push 到 `main` 會由 `.github/workflows/deploy.yml` 自動部署到 GitHub Pages。
+
+## PWA / 離線
+
+`vite-plugin-pwa`（`vite.config.ts`）產生 service worker，precache 所有靜態資產、
+離線時 SPA 回退 `index.html`。`registerType: "autoUpdate"` —— 有新版自動更新。
+manifest 與圖示在 `public/`。資料本來就在 IndexedDB，所以離線可完整編輯。
 
 ## 現況（重構進度）
 

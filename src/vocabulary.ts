@@ -14,7 +14,7 @@ export interface Vocabulary {
 }
 
 export const DEFAULT_VOCABULARY: Vocabulary = {
-  planLayer: "規劃分區",
+  planLayer: "底圖分類",
   category: "分類",
   feature: "區域",
 };

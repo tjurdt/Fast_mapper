@@ -1,12 +1,11 @@
 /**
  * MapRenderer —— 綁定三張 DOM canvas、Viewport、Scheduler 與 Scene。
  *
- * 效能策略：
- *  - 三張 canvas（base / content / interaction）疊在一個 stage 容器裡
- *  - setScene 比對前後 scene，只重畫真正變動的圖層。互動（選取 / 拖曳框）只重畫
- *    最上層便宜的 interaction；文件編輯才重畫 content；規劃分區改了才重畫 base
- *  - pan/zoom 期間只改 stage 的 CSS transform，停手 ~110ms 後才重新光柵化
- *  - **只有 fit() / frameRegion() 會改變縮放**；resize 保留目前視角
+ * 效能策略（對齊 legacy 單檔版的順暢感）：
+ *  - 三張 canvas 都畫成「整張影像大小」，疊在 `.stage` 容器裡，只光柵化一次
+ *  - pan / zoom / 聚焦：**只改 `.stage` 的 CSS transform**，完全不重新光柵化
+ *  - 只有文件內容改變才重畫 base / content；互動層（選取框等）便宜、每次互動重畫
+ *  - backing store 尺寸受 4096 上限保護（iOS Safari），必要時降解析度
  */
 import { Viewport } from "./viewport";
 import { RenderScheduler, ALL_LAYERS, type Layer } from "./scheduler";
@@ -14,8 +13,8 @@ import { BaseImageLayer } from "./baseImage";
 import { drawBaseLayer, drawContentLayer, drawInteractionLayer } from "./layers";
 import { sceneDims, type Scene } from "./scene";
 
-const RERASTER_DELAY = 110;
 const MAX_DPR = 2;
+const MAX_BACKING = 4096; // 單邊像素上限（iOS Safari 安全值）
 
 export interface MapRendererOptions {
   loadBlob?: (blobId: string) => Promise<Blob | null>;
@@ -28,11 +27,12 @@ export class MapRenderer {
   private readonly ctx: Record<Layer, CanvasRenderingContext2D>;
   private readonly canvas: Record<Layer, HTMLCanvasElement>;
 
-  private dpr = 1;
+  /** backing store 相對影像單位的縮放（HiDPI，受上限保護）。 */
+  private q = 1;
+  private imgW = 1;
+  private imgH = 1;
   private scene: Scene | null = null;
   private prevBlobId: string | null = null;
-  private rendered = { tx: 0, ty: 0, s: 1 };
-  private reraster = 0;
   private ro: ResizeObserver | null = null;
 
   constructor(
@@ -74,14 +74,12 @@ export class MapRenderer {
 
     const d = sceneDims(scene.geo);
     this.viewport.setImageSize(d.imgW, d.imgH);
+    const imgSizeChanged = d.imgW !== this.imgW || d.imgH !== this.imgH;
+    if (imgSizeChanged) this.syncCanvasPixels(d.imgW, d.imgH);
 
-    const gridChanged =
-      !prev ||
-      prev.doc.grid.w !== scene.doc.grid.w ||
-      prev.doc.grid.h !== scene.doc.grid.h ||
-      prev.doc.grid.cellPx !== scene.doc.grid.cellPx;
-    const docChanged = !prev || prev.doc !== scene.doc;
-    const viewChanged = !prev || prev.view !== scene.view;
+    const first = !prev;
+    const docChanged = first || prev.doc !== scene.doc;
+    const viewChanged = first || prev.view !== scene.view;
 
     // 底圖圖片
     const blobId = scene.doc.baseImage?.blobId ?? null;
@@ -93,8 +91,10 @@ export class MapRenderer {
       else await this.baseImage.load(null);
     }
 
-    if (gridChanged) {
-      this.fit(); // 只有這裡（首次 / 網格尺寸改變）會自動改縮放
+    if (first || imgSizeChanged) {
+      this.viewport.fit(this.stageSize().w, this.stageSize().h);
+      this.applyViewTransform();
+      this.scheduler.request(...ALL_LAYERS); // 首次 / 影像尺寸改變 → 全部重畫
       return;
     }
 
@@ -102,80 +102,74 @@ export class MapRenderer {
     if (docChanged || imageChanged) dirty.push("base");
     if (docChanged || viewChanged) dirty.push("content");
     this.scheduler.request(...dirty);
+    this.applyViewTransform();
   }
 
-  /** 視窗 / 容器尺寸改變：重設 canvas 像素，**保留目前視角**。 */
+  /** 視窗 / 容器尺寸改變：只更新視角變換，canvas 不動、不重新光柵化。 */
   resize(): void {
     const { w, h } = this.stageSize();
-    this.dpr = Math.min(typeof devicePixelRatio === "number" ? devicePixelRatio : 1, MAX_DPR);
-    this.syncCanvasPixels(w, h);
     this.viewport.fitBase(w);
     this.viewport.clampT(w, h);
-    this.scheduler.flushNow();
+    this.applyViewTransform();
   }
 
-  /** 重設為「置中、全覽」。只由縮放堆疊的全覽鈕 / 首次載入呼叫。 */
+  /** 重設為「置中、全覽」。內容解析度與視角無關，只需移動 `.stage`。 */
   fit(): void {
     const { w, h } = this.stageSize();
-    this.dpr = Math.min(typeof devicePixelRatio === "number" ? devicePixelRatio : 1, MAX_DPR);
-    this.syncCanvasPixels(w, h);
     this.viewport.fit(w, h);
-    this.scheduler.flushNow();
+    this.applyViewTransform();
   }
 
-  /** 把影像座標矩形框進視野（點清單項目 → 聚焦某個命名區域）。 */
+  /** 把影像座標矩形框進視野（點清單項目 → 聚焦某個命名區域）。只移動 `.stage`。 */
   frameRegion(x0: number, y0: number, x1: number, y1: number, padImg = 0): void {
     const { w, h } = this.stageSize();
-    this.dpr = Math.min(typeof devicePixelRatio === "number" ? devicePixelRatio : 1, MAX_DPR);
-    this.syncCanvasPixels(w, h);
     const vp = this.viewport;
-    vp.fitBase(w); // baseW = w
+    vp.fitBase(w);
     const rw = Math.max(vp.imgW / 40, x1 - x0 + padImg * 2);
     const rh = Math.max(vp.imgH / 40, y1 - y0 + padImg * 2);
-    // viewK = baseW*s/imgW，baseW=w → 目標 viewK 讓 rw 影像單位 ≈ 0.85 螢幕
     const targetK = Math.min((w * 0.85) / rw, (h * 0.8) / rh);
     vp.s = Math.max(0.4, Math.min(16, (targetK * vp.imgW) / w));
     const vk = vp.viewK();
     vp.tx = w / 2 - ((x0 + x1) / 2) * vk;
     vp.ty = h / 2 - ((y0 + y1) / 2) * vk;
     vp.clampT(w, h);
-    this.scheduler.flushNow();
+    this.applyViewTransform();
   }
 
-  private syncCanvasPixels(w: number, h: number): void {
+  private syncCanvasPixels(imgW: number, imgH: number): void {
+    this.imgW = imgW;
+    this.imgH = imgH;
+    const dpr = Math.min(typeof devicePixelRatio === "number" ? devicePixelRatio : 1, MAX_DPR);
+    this.q = Math.min(dpr, MAX_BACKING / Math.max(imgW, imgH));
+    const pw = Math.round(imgW * this.q);
+    const ph = Math.round(imgH * this.q);
     for (const l of ALL_LAYERS) {
       const cv = this.canvas[l];
-      const pw = Math.round(w * this.dpr);
-      const ph = Math.round(h * this.dpr);
       if (cv.width !== pw || cv.height !== ph) {
         cv.width = pw;
         cv.height = ph;
       }
-      cv.style.width = w + "px";
-      cv.style.height = h + "px";
+      cv.style.width = imgW + "px";
+      cv.style.height = imgH + "px";
     }
   }
 
-  /** 手勢期間：只更新 CSS transform，排程稍後重新光柵化。 */
+  /** `.stage` 的 CSS transform：影像座標 → 螢幕座標。pan/zoom 期間唯一要做的事。 */
+  applyViewTransform(): void {
+    const { tx, ty } = this.viewport;
+    const k = this.viewport.viewK();
+    this.stage.style.transform = `translate(${tx}px,${ty}px) scale(${k})`;
+    this.stage.dataset.vp = `${this.viewport.s.toFixed(3)},${Math.round(tx)},${Math.round(ty)}`;
+  }
+
+  /** 舊名沿用：手勢期間呼叫，只更新變換。 */
   applyLiveTransform(): void {
-    const { tx, ty, s } = this.viewport;
-    const ratio = s / (this.rendered.s || 1);
-    this.stage.style.transform = `translate(${tx - this.rendered.tx * ratio}px,${ty - this.rendered.ty * ratio}px) scale(${ratio})`;
-    if (this.reraster) clearTimeout(this.reraster);
-    this.reraster = window.setTimeout(() => {
-      this.reraster = 0;
-      this.scheduler.flushNow();
-    }, RERASTER_DELAY);
+    this.applyViewTransform();
   }
 
   private paint(layers: ReadonlySet<Layer>): void {
-    if (this.reraster) {
-      clearTimeout(this.reraster);
-      this.reraster = 0;
-    }
     if (!this.scene) {
       for (const l of ALL_LAYERS) this.clear(l);
-      this.stage.style.transform = "none";
       return;
     }
     const dims = sceneDims(this.scene.geo);
@@ -194,19 +188,15 @@ export class MapRenderer {
       this.begin("interaction");
       drawInteractionLayer(this.ctx.interaction, this.scene, dims);
     }
-    this.rendered = { ...this.viewport.transform };
-    this.stage.style.transform = "none";
-    const { s, tx, ty } = this.viewport;
-    this.stage.dataset.vp = `${s.toFixed(3)},${Math.round(tx)},${Math.round(ty)}`;
+    this.applyViewTransform();
   }
 
   private begin(l: Layer): void {
     const ctx = this.ctx[l];
     const cv = this.canvas[l];
-    const k = this.viewport.viewK() * this.dpr;
     ctx.setTransform(1, 0, 0, 1, 0, 0);
     ctx.clearRect(0, 0, cv.width, cv.height);
-    ctx.setTransform(k, 0, 0, k, this.viewport.tx * this.dpr, this.viewport.ty * this.dpr);
+    ctx.setTransform(this.q, 0, 0, this.q, 0, 0);
   }
 
   private clear(l: Layer): void {
@@ -225,7 +215,6 @@ export class MapRenderer {
     this.scheduler.dispose();
     this.baseImage.dispose();
     this.ro?.disconnect();
-    if (this.reraster) clearTimeout(this.reraster);
   }
 }
 

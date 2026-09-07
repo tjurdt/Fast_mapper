@@ -94,7 +94,7 @@ export function ActionBar({ onAssign, onOffset }: { onAssign: () => void; onOffs
     // 複製 → 貼上流程
     if (store.pasteMode.value) {
       return (
-        <div class="actionbar">
+        <div class="actionbar simple">
           <button
             class="assign"
             onClick={() => {
@@ -157,7 +157,7 @@ export function ActionBar({ onAssign, onOffset }: { onAssign: () => void; onOffs
   // 「網格」模式
   if (selCells === 0) return null;
   return (
-    <div class="actionbar">
+    <div class="actionbar simple">
       <button class="assign" onClick={onAssign}>
         {t("sel.edit")}
       </button>

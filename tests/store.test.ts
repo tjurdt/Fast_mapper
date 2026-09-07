@@ -99,4 +99,22 @@ describe("store bootstrap", () => {
     });
     expect(store.numbers.value).toEqual({ f1: 1, f2: 2 });
   });
+
+  it("selectionOverlapMarks 找出選取重疊的既有區域 / 分類", async () => {
+    delete (globalThis as Record<string, unknown>).localStorage;
+    store._setAdapterForTests(new MemoryAdapter());
+    await store.createFromTemplate("blank-grid");
+    const cat = store.project.value!.doc.categories[0]!.id;
+    store.editDoc((doc) => {
+      doc.features.push({ id: "fA", name: "阿明", category: cat });
+      doc.cells["1_1"] = { cat, feature: "fA" };
+      doc.cells["1_2"] = { cat, feature: "fA" };
+      doc.cells["1_3"] = { cat }; // 有分類、無區域
+      return doc;
+    });
+    store.setSelection(["1_1", "1_2", "1_3", "2_9"]);
+    const marks = store.selectionOverlapMarks();
+    expect(marks[0]).toMatchObject({ type: "feature", id: "fA", name: "阿明", count: 2 });
+    expect(marks[1]).toMatchObject({ type: "category", id: cat, count: 1 });
+  });
 });

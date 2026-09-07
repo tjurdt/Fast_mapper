@@ -65,6 +65,8 @@ export const zhHant = {
   "assign.ditto": "同上",
   "assign.cancel": "取消",
   "assign.apply": "套用",
+  "assign.inherit": "沿用重疊區域",
+  "assign.cellN": "{n} 格",
 
   "cell.title": "單格內容",
   "cell.plan": "{planLayer}",
@@ -94,7 +96,10 @@ export const zhHant = {
   "legend.facility": "設施",
   "legend.count": "{n}",
   "legend.addCat": "新增分類",
-  "legend.manage": "管理分類",
+  "legend.manage": "圖例管理",
+  "legend.emptyCats": "（尚無分類）",
+  "manage.hintActual": "編輯「實際分類」的顏色與名稱。切到「底圖」檢視可編輯底圖分類。",
+  "manage.hintPlan": "編輯「底圖分類」的顏色與名稱。切到「實際」檢視可編輯實際分類。",
 
   "facility.label": "設施 icon",
   "facility.none": "（無）",
@@ -112,6 +117,7 @@ export const zhHant = {
   "cats.planTab": "{planLayer}",
   "cats.catTab": "{category}",
   "cats.add": "新增",
+  "cats.delete": "刪除",
   "cats.done": "完成",
   "cats.deleteConfirm": "刪除「{name}」？使用到的格子會一併清除該標記。",
 

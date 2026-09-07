@@ -298,6 +298,62 @@ export function assignSelection(args: AssignArgs): void {
   clearSelection();
 }
 
+export interface OverlapMark {
+  type: "feature" | "category";
+  id: string;
+  name: string;
+  color: string;
+  count: number;
+}
+
+/** 目前選取的格子（band 格展開到底下的一般格）重疊到的既有命名區域 / 分類，依格數排序。 */
+export function selectionOverlapMarks(): OverlapMark[] {
+  const geo = geometry.value;
+  const p = project.value;
+  if (!geo || !p) return [];
+  const src = new Set<CellKey>();
+  for (const k of selection.value) {
+    if (k.charCodeAt(0) === 66) for (const nk of geo.gridKeysUnderQuad(geo.keyQuad(k))) src.add(nk);
+    else src.add(k);
+  }
+  const catColor = new Map(p.doc.categories.map((c) => [c.id, c.color]));
+  const featById = new Map(p.doc.features.map((f) => [f.id, f]));
+  const acc = new Map<string, OverlapMark>();
+  for (const k of src) {
+    const d = p.doc.cells[k];
+    if (!d) continue;
+    if (d.feature && featById.has(d.feature)) {
+      const f = featById.get(d.feature)!;
+      const e =
+        acc.get("f:" + f.id) ??
+        acc
+          .set("f:" + f.id, {
+            type: "feature",
+            id: f.id,
+            name: f.name,
+            color: catColor.get(f.category) ?? "#ccc",
+            count: 0,
+          })
+          .get("f:" + f.id)!;
+      e.count++;
+    } else if (d.cat && catColor.has(d.cat)) {
+      const e =
+        acc.get("c:" + d.cat) ??
+        acc
+          .set("c:" + d.cat, {
+            type: "category",
+            id: d.cat,
+            name: p.doc.categories.find((c) => c.id === d.cat)!.name,
+            color: catColor.get(d.cat)!,
+            count: 0,
+          })
+          .get("c:" + d.cat)!;
+      e.count++;
+    }
+  }
+  return [...acc.values()].sort((a, b) => b.count - a.count);
+}
+
 export function eraseSelection(): void {
   if (!selection.value.size) return;
   const keys = [...selection.value];

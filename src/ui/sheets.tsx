@@ -1,17 +1,81 @@
-import { useState } from "preact/hooks";
+import { useMemo, useState } from "preact/hooks";
 import { t } from "../i18n";
 import { tv } from "./vocab";
 import { Dialog } from "./Dialog";
 import * as store from "../store";
 import { isBandKey } from "../core/keys";
 import { FACILITIES } from "../facilities";
+import type { Feature } from "../core/types";
 
 // ---- 指定分類與命名區域 ----
 
+const norm = (s: string) => s.trim().toLocaleLowerCase("zh-Hant");
+
+/** 依輸入排序既有命名區域（移植 legacy matchingShops）。 */
+function matchFeatures(
+  features: readonly Feature[],
+  numbers: Record<string, number>,
+  raw: string,
+): Feature[] {
+  const q = norm(raw);
+  const numq = raw.replace(/^#\s*/, "").trim();
+  return features
+    .map((f) => {
+      const num = String(numbers[f.id] ?? "");
+      const name = norm(f.name);
+      let rank = 9;
+      if (!q) rank = 8;
+      else if (num && num === numq) rank = 0;
+      else if (name === q) rank = 1;
+      else if (name.startsWith(q)) rank = 2;
+      else if (num && num.startsWith(numq)) rank = 3;
+      else if (name.includes(q)) rank = 4;
+      else return null;
+      return { f, rank, num: Number(num) || Number.MAX_SAFE_INTEGER };
+    })
+    .filter((x): x is { f: Feature; rank: number; num: number } => !!x)
+    .sort((a, b) => a.rank - b.rank || a.num - b.num || a.f.name.localeCompare(b.f.name, "zh-Hant"))
+    .slice(0, 12)
+    .map((x) => x.f);
+}
+
 export function AssignSheet({ onClose }: { onClose: () => void }) {
   const p = store.project.value!;
-  const [catId, setCatId] = useState(p.doc.categories[0]?.id ?? "");
-  const [name, setName] = useState("");
+  const numbers = store.numbers.value;
+  const marks = useMemo(() => store.selectionOverlapMarks(), []);
+  const soleFeature =
+    marks.length === 1 && marks[0]!.type === "feature"
+      ? (p.doc.features.find((f) => f.id === marks[0]!.id) ?? null)
+      : null;
+
+  const [catId, setCatId] = useState(
+    soleFeature?.category ?? (marks[0]?.type === "category" ? marks[0]!.id : (p.doc.categories[0]?.id ?? "")),
+  );
+  const [name, setName] = useState(soleFeature?.name ?? "");
+  const [pickedId, setPickedId] = useState<string | null>(soleFeature?.id ?? null);
+  const [open, setOpen] = useState(false);
+
+  const suggestions = useMemo(
+    () => (open ? matchFeatures(p.doc.features, numbers, name) : []),
+    [open, name, p.doc.features, numbers],
+  );
+
+  const pickFeature = (f: Feature) => {
+    setName(f.name);
+    setCatId(f.category);
+    setPickedId(f.id);
+    setOpen(false);
+  };
+  const pickMark = (m: store.OverlapMark) => {
+    if (m.type === "feature") {
+      const f = p.doc.features.find((x) => x.id === m.id);
+      if (f) pickFeature(f);
+    } else {
+      setCatId(m.id);
+      setName("");
+      setPickedId(null);
+    }
+  };
 
   return (
     <Dialog
@@ -24,7 +88,13 @@ export function AssignSheet({ onClose }: { onClose: () => void }) {
             class="primary"
             disabled={!catId}
             onClick={() => {
-              store.assignSelection({ categoryId: catId, featureName: name });
+              const typed = name.trim();
+              const exact = p.doc.features.find((f) => f.name === typed);
+              store.assignSelection({
+                categoryId: catId,
+                ...(pickedId ? { featureId: pickedId } : exact ? { featureId: exact.id } : {}),
+                featureName: typed,
+              });
               onClose();
             }}
           >
@@ -33,6 +103,27 @@ export function AssignSheet({ onClose }: { onClose: () => void }) {
         </>
       }
     >
+      {marks.length > 0 && (
+        <div class="inherit">
+          <span class="inherit-lbl">{t("assign.inherit")}</span>
+          <div class="chips">
+            {marks.map((m) => (
+              <button
+                key={m.type + m.id}
+                class={
+                  pickedId === m.id || (m.type === "category" && catId === m.id && !pickedId) ? "on" : ""
+                }
+                onClick={() => pickMark(m)}
+              >
+                <span class="sw" style={{ background: m.color }} />
+                {m.type === "feature" ? m.name : m.name + "（未命名）"}
+                <span class="muted">{t("assign.cellN", { n: m.count })}</span>
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
       <label class="fieldrow">
         <span>{tv("assign.category")}</span>
         <select value={catId} onChange={(e) => setCatId((e.target as HTMLSelectElement).value)}>
@@ -43,14 +134,39 @@ export function AssignSheet({ onClose }: { onClose: () => void }) {
           ))}
         </select>
       </label>
-      <label class="fieldrow">
+
+      <label class="fieldrow combo">
         <span>{tv("assign.feature")}</span>
-        <input
-          class="field"
-          placeholder={t("assign.featurePlaceholder")}
-          value={name}
-          onInput={(e) => setName((e.target as HTMLInputElement).value)}
-        />
+        <div class="combo-box">
+          <input
+            class="field"
+            placeholder={t("assign.featurePlaceholder")}
+            value={name}
+            onFocus={() => setOpen(true)}
+            onInput={(e) => {
+              setName((e.target as HTMLInputElement).value);
+              setPickedId(null);
+              setOpen(true);
+            }}
+            onBlur={() => setTimeout(() => setOpen(false), 120)}
+          />
+          {open && suggestions.length > 0 && (
+            <div class="combo-list">
+              {suggestions.map((f) => (
+                <button
+                  key={f.id}
+                  type="button"
+                  onMouseDown={(e) => e.preventDefault()}
+                  onClick={() => pickFeature(f)}
+                >
+                  <span class="numbadge">{numbers[f.id] ?? "–"}</span>
+                  <span class="mt-nm">{f.name}</span>
+                  <span class="muted">{p.doc.categories.find((c) => c.id === f.category)?.name ?? ""}</span>
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
       </label>
     </Dialog>
   );

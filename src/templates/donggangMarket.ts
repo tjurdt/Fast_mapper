@@ -52,7 +52,7 @@ export const donggangMarketTemplate: Template = {
   description: "原始範本：9 個規劃分區、既有攤位底圖，網格 156 × 54。",
   build: async () => ({
     name: "東港華僑市場",
-    vocabulary: { planLayer: "規劃分區", category: "實際分類", feature: "店家" },
+    vocabulary: { planLayer: "底圖分類", category: "實際分類", feature: "店家" },
     doc: {
       grid: { w: 156, h: 54, cellPx: 14 },
       planLayers: DONGGANG_PLAN_LAYERS.map((z) => ({ ...z })),

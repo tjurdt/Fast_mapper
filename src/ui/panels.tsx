@@ -6,39 +6,35 @@ import { uiEvents } from "../store";
 import { LegendIcon } from "./widgets";
 import { facilityById, FACILITIES } from "../facilities";
 
-type Tab = "list" | "legend";
+type Tab = "list" | "legend" | "manage";
 
-/** 桌機：地圖右側常駐側欄；手機：底部抽屜。由 CSS 切換。 */
+/** 桌機：地圖右側常駐側欄；手機：底部抽屜（只有開／關兩種狀態）。 */
 export function SidePanel({ onClosePanel }: { onClosePanel: () => void }) {
   const [tab, setTab] = useState<Tab>("list");
-  const [open, setOpen] = useState(true);
   const p = store.project.value;
   if (!p) return null;
 
   return (
-    <aside class={open ? "sidepanel open" : "sidepanel"}>
+    <aside class="sidepanel">
       <div class="sp-head">
         <button class={tab === "list" ? "tab on" : "tab"} onClick={() => setTab("list")}>
+          <span class="tab-ic">▤</span>
           {tv("list.title")}
         </button>
         <button class={tab === "legend" ? "tab on" : "tab"} onClick={() => setTab("legend")}>
-          <LegendIcon size={14} />
+          <LegendIcon size={13} />
           {t("legend.title")}
         </button>
-        <span class="grow" />
-        <button
-          class="icon sp-collapse"
-          aria-label={t("panel.toggle")}
-          title={t("panel.toggle")}
-          onClick={() => setOpen(!open)}
-        >
-          {open ? "⟩" : "⟨"}
+        <button class={tab === "manage" ? "tab on" : "tab"} onClick={() => setTab("manage")}>
+          <span class="tab-ic">⚙</span>
+          {t("legend.manage")}
         </button>
-        <button class="sp-done" onClick={onClosePanel}>
-          {t("common.done")}
+        <span class="grow" />
+        <button class="icon sp-done" aria-label={t("common.close")} onClick={onClosePanel}>
+          ✕
         </button>
       </div>
-      {open && (tab === "list" ? <FeatureList /> : <Legend />)}
+      {tab === "list" ? <FeatureList /> : tab === "legend" ? <Legend /> : <ManageCategories />}
     </aside>
   );
 }
@@ -105,6 +101,7 @@ function FeatureList() {
 
 function Legend() {
   const p = store.project.value!;
+  const plan = p.view.view === "plan";
   const catCount: Record<string, number> = {};
   const planCount: Record<string, number> = {};
   for (const k in p.doc.cells) {
@@ -116,37 +113,23 @@ function Legend() {
   for (const f of p.doc.features) if (f.facility) facCount[f.facility] = (facCount[f.facility] ?? 0) + 1;
   const facs = FACILITIES.filter((fa) => facCount[fa.id]);
 
+  const items = plan
+    ? p.doc.planLayers.map((z) => ({ id: z.id, name: z.name, color: z.color, n: planCount[z.id] ?? 0 }))
+    : p.doc.categories.map((c) => ({ id: c.id, name: c.name, color: c.color, n: catCount[c.id] ?? 0 }));
+
   return (
     <div class="sp-body legend">
-      <h4>{tv("legend.plan")}</h4>
+      <h4>{plan ? tv("legend.plan") : tv("legend.actual")}</h4>
       <ul>
-        {p.doc.planLayers.map((z) => (
-          <li key={z.id}>
-            <span class="sw" style={{ background: z.color }} />
-            <span class="lg-nm">{z.name}</span>
-            <span class="muted">{planCount[z.id] ?? 0}</span>
+        {items.map((it) => (
+          <li key={it.id}>
+            <span class="sw" style={{ background: it.color }} />
+            <span class="lg-nm">{it.name}</span>
+            <span class="muted">{it.n}</span>
           </li>
         ))}
+        {!items.length && <li class="muted">{t("legend.emptyCats")}</li>}
       </ul>
-      <h4>{tv("legend.actual")}</h4>
-      <ul>
-        {p.doc.categories.map((c) => (
-          <li key={c.id}>
-            <input
-              class="sw"
-              type="color"
-              value={c.color}
-              aria-label={c.name}
-              onChange={(e) =>
-                store.updateCategoryAction(c.id, { color: (e.target as HTMLInputElement).value })
-              }
-            />
-            <span class="lg-nm">{c.name}</span>
-            <span class="muted">{catCount[c.id] ?? 0}</span>
-          </li>
-        ))}
-      </ul>
-      <AddCategoryRow />
       {facs.length > 0 && (
         <>
           <h4>{t("legend.facility")}</h4>
@@ -161,39 +144,67 @@ function Legend() {
           </ul>
         </>
       )}
-      <button class="lg-manage" onClick={() => uiEvents.emit("cats-sheet")}>
-        {t("legend.manage")}
-      </button>
     </div>
   );
 }
 
-function AddCategoryRow() {
+/** 圖例管理：依目前檢視模式編輯「實際分類」或「底圖分類」。 */
+function ManageCategories() {
+  const p = store.project.value!;
+  const plan = p.view.view === "plan";
+  const items = plan ? p.doc.planLayers : p.doc.categories;
   const [name, setName] = useState("");
-  const [color, setColor] = useState("#4c9aff");
+  const [color, setColor] = useState(plan ? "#7bb0e0" : "#4c9aff");
+
+  const upd = (id: string, patch: { name?: string; color?: string }) =>
+    plan ? store.updatePlanLayerAction(id, patch) : store.updateCategoryAction(id, patch);
+  const del = (id: string, nm: string) => {
+    if (!confirm(t("cats.deleteConfirm", { name: nm }))) return;
+    if (plan) store.deletePlanLayerAction(id);
+    else store.deleteCategoryAction(id);
+  };
   const add = () => {
-    store.addCategoryAction(name.trim() || t("legend.addCat"), color);
+    const nm = name.trim() || t("legend.addCat");
+    if (plan) store.addPlanLayerAction(nm, color);
+    else store.addCategoryAction(nm, color);
     setName("");
   };
+
   return (
-    <div class="lg-add">
-      <input
-        class="sw"
-        type="color"
-        value={color}
-        aria-label={t("legend.addCat")}
-        onInput={(e) => setColor((e.target as HTMLInputElement).value)}
-      />
-      <input
-        class="field"
-        placeholder={t("legend.addCat")}
-        value={name}
-        onInput={(e) => setName((e.target as HTMLInputElement).value)}
-        onKeyDown={(e) => e.key === "Enter" && add()}
-      />
-      <button class="icon" aria-label={t("legend.addCat")} onClick={add}>
-        ＋
-      </button>
+    <div class="sp-body">
+      <p class="sp-hint">{plan ? t("manage.hintPlan") : t("manage.hintActual")}</p>
+      <ul class="cat-list">
+        {items.map((it) => (
+          <li key={it.id}>
+            <input
+              type="color"
+              value={it.color}
+              onInput={(e) => upd(it.id, { color: (e.target as HTMLInputElement).value })}
+            />
+            <input
+              class="field"
+              value={it.name}
+              onInput={(e) => upd(it.id, { name: (e.target as HTMLInputElement).value })}
+            />
+            <button class="icon danger" aria-label={t("cats.delete")} onClick={() => del(it.id, it.name)}>
+              ✕
+            </button>
+          </li>
+        ))}
+      </ul>
+      <div class="lg-add">
+        <input type="color" value={color} onInput={(e) => setColor((e.target as HTMLInputElement).value)} />
+        <input
+          class="field"
+          placeholder={t("legend.addCat")}
+          value={name}
+          onInput={(e) => setName((e.target as HTMLInputElement).value)}
+          onKeyDown={(e) => e.key === "Enter" && add()}
+        />
+        <button class="icon" aria-label={t("legend.addCat")} onClick={add}>
+          ＋
+        </button>
+      </div>
     </div>
   );
 }

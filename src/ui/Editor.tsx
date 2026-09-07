@@ -67,18 +67,6 @@ export function Editor() {
         </div>
       </div>
 
-      {/* 桌機：右下懸浮圖例鈕（動作列開啟時讓位） */}
-      {!barActive && (
-        <button
-          class="panel-fab"
-          onClick={() => setPanelOpen(!panelOpen)}
-          aria-label={t("panel.toggle")}
-          title={t("panel.toggle")}
-        >
-          <LegendIcon size={18} />
-        </button>
-      )}
-
       {/* 手機：返回／重作／圖例，隨底部工具列上抬 */}
       <div class={barActive ? "mobiledock raised" : "mobiledock"} hidden={panelOpen}>
         <button

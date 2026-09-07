@@ -167,7 +167,7 @@ export async function projectFromLegacyState(raw: LegacyState): Promise<Project>
 
   return createProject({
     name: "東港華僑市場",
-    vocabulary: { planLayer: "規劃分區", category: "實際分類", feature: "店家" },
+    vocabulary: { planLayer: "底圖分類", category: "實際分類", feature: "店家" },
     view: {
       view: state.view === "plan" ? "plan" : "actual",
       fillA: typeof state.fillA === "number" ? state.fillA : 80,

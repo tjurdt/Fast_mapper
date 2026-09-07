@@ -39,6 +39,8 @@ const DIRS = [
   { dir: "right", label: "→" },
 ] as const;
 
+const DEPTH_OPTS = [0, 1, 2, 3, 4, 5, 6, 7, 8];
+
 export function ActionBar({ onAssign, onOffset }: { onAssign: () => void; onOffset: () => void }) {
   const tool = store.activeToolId.value;
   const cut = store.scene.value?.editingCut ?? null;
@@ -62,25 +64,19 @@ export function ActionBar({ onAssign, onOffset }: { onAssign: () => void; onOffs
           labels={{ "-1": t("cut.side.-1"), "1": t("cut.side.1"), "0": t("cut.side.0") }}
           onChange={() => store.updateCut(cut.id, "side")}
         />
-        <span class="depthctl">
-          <button
-            type="button"
-            aria-label={t("cut.depthDown")}
-            onClick={() => store.updateCut(cut.id, "depth-")}
+        <label class="gridadd">
+          <span>{t("cut.depth")}</span>
+          <select
+            value={String(cut.depth)}
+            onChange={(e) => store.setCutDepthAction(cut.id, Number((e.target as HTMLSelectElement).value))}
           >
-            −
-          </button>
-          <span>
-            {t("cut.depth")} {cut.depth}
-          </span>
-          <button
-            type="button"
-            aria-label={t("cut.depthUp")}
-            onClick={() => store.updateCut(cut.id, "depth+")}
-          >
-            ＋
-          </button>
-        </span>
+            {DEPTH_OPTS.map((n) => (
+              <option key={n} value={n}>
+                {n}
+              </option>
+            ))}
+          </select>
+        </label>
         <button class="danger" onClick={() => store.updateCut(cut.id, "delete")}>
           {t("cut.delete")}
         </button>
@@ -93,7 +89,30 @@ export function ActionBar({ onAssign, onOffset }: { onAssign: () => void; onOffs
 
   // 「選取」模式（物件）
   if (tool === "objselect") {
-    if (selCells === 0 && selCuts === 0) return null;
+    if (selCells === 0 && selCuts === 0 && !store.pasteMode.value) return null;
+
+    // 複製 → 貼上流程
+    if (store.pasteMode.value) {
+      return (
+        <div class="actionbar">
+          <button
+            class="assign"
+            onClick={() => {
+              if (store.clipboardPaste()) store.uiEvents.emit("toast", t("sel.paste"));
+            }}
+          >
+            {t("sel.paste")}
+          </button>
+          <button class="danger" onClick={() => store.exitPasteMode()}>
+            {t("sel.pasteCancel")}
+          </button>
+          <button class="go" onClick={() => store.clearSelection()}>
+            {t("sel.done")}
+          </button>
+        </div>
+      );
+    }
+
     const move = (dir: "up" | "down" | "left" | "right") => {
       const d: Record<typeof dir, [number, number]> = {
         up: [0, -1],
@@ -107,13 +126,23 @@ export function ActionBar({ onAssign, onOffset }: { onAssign: () => void; onOffs
     };
     return (
       <div class="actionbar">
-        {DIRS.map((m) => (
-          <button key={m.dir} class="dirbtn" aria-label={m.dir} onClick={() => move(m.dir)}>
-            {m.label}
-          </button>
-        ))}
+        <span class="dpad">
+          {DIRS.map((m) => (
+            <button key={m.dir} class="dirbtn" aria-label={m.dir} onClick={() => move(m.dir)}>
+              {m.label}
+            </button>
+          ))}
+        </span>
         <button class="assign" onClick={onOffset}>
           {t("offset.title")}
+        </button>
+        <button
+          class="assign"
+          onClick={() => {
+            if (!store.startPasteMode()) store.uiEvents.emit("toast", t("sel.empty"));
+          }}
+        >
+          {t("sel.copy")}
         </button>
         <button class="danger" onClick={() => store.deleteObjectsAction()}>
           {t("sel.delete")}

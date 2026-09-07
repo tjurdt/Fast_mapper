@@ -332,7 +332,7 @@ export function SettingsSheet({
         <button onClick={() => downloadJson(store.exportProjectJson(), p.name)}>
           {t("settings.exportJson")}
         </button>
-        <button onClick={pickJson}>{t("settings.importJson")}</button>
+        <button onClick={() => pickJson(onClose)}>{t("settings.importJson")}</button>
       </div>
     </Dialog>
   );
@@ -543,7 +543,7 @@ function downloadJson(text: string, name: string) {
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
-function pickJson() {
+function pickJson(onDone?: () => void) {
   const input = document.createElement("input");
   input.type = "file";
   input.accept = "application/json,.json";
@@ -551,7 +551,8 @@ function pickJson() {
     const f = input.files?.[0];
     if (!f) return;
     const ok = await store.importProjectJson(await f.text());
-    if (!ok) alert("匯入失敗");
+    if (ok) onDone?.();
+    else alert(t("settings.importFailed"));
   };
   input.click();
 }

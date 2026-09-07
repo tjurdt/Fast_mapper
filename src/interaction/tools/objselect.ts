@@ -18,6 +18,7 @@ export const objSelectTool: Tool = {
 
   onTap(ctx, p) {
     ctx.actions.setPasteAnchor(p.cell);
+    if (ctx.pasteMode) return; // 貼上流程：只記錨點，不動選取
     const nearCut = ctx.geo.cutNear(p.img.x, p.img.y, ctx.hitTolerance());
     if (nearCut) {
       ctx.actions.toggleCutSelected(nearCut);
@@ -33,10 +34,12 @@ export const objSelectTool: Tool = {
   },
 
   onDrag(ctx, from, to) {
+    if (ctx.pasteMode) return;
     ctx.transient.setDragRect(rectOf(from, to));
   },
 
   onDragEnd(ctx, from, to) {
+    if (ctx.pasteMode) return;
     ctx.transient.setDragRect(null);
     ctx.actions.objSelectRect(rectOf(from, to), true);
   },

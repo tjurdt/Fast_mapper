@@ -76,6 +76,7 @@ export class InteractionController {
       selection: store.selection.value,
       editingCutId: store.editingCutId.value,
       activeFeatureId: store.activeFeatureId.value,
+      pasteMode: store.pasteMode.value,
       resolve: (gp) => this.resolveRaw(gp, geo, p.view.view),
       hitTolerance: () => {
         const k = this.renderer.viewport.viewK() || 1;

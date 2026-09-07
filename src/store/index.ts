@@ -18,7 +18,7 @@ import {
   type ProjectSummary,
   type StorageAdapter,
 } from "../persistence";
-import { readLegacyProject } from "../model/legacy";
+import { readLegacyProject, projectFromLegacyState, type LegacyState } from "../model/legacy";
 import {
   addCategory,
   addPlanLayer,
@@ -43,6 +43,7 @@ import {
   setFeatureCategory,
   setFeatureFacility,
   setGridSize,
+  setCutDepth,
   stepCutDepth,
   toggleCutWall,
   updateCategory,
@@ -78,10 +79,23 @@ export const pasteAnchor = signal<[number, number] | null>(null);
 
 let clipboard: Clipboard | null = null;
 export const clipboardFilled = signal(false);
+/** 「選取」模式的複製→貼上流程：true 時動作列只剩 貼上／取消複製／完成。 */
+export const pasteMode = signal(false);
+
+/** 進入貼上流程：把目前選取存進剪貼簿。 */
+export function startPasteMode(): boolean {
+  if (!clipboardCopy(false)) return false;
+  pasteMode.value = true;
+  return true;
+}
+export function exitPasteMode(): void {
+  pasteMode.value = false;
+}
 
 export function setTool(id: string): void {
   if (activeToolId.value === id) return;
   activeToolId.value = id;
+  pasteMode.value = false;
   clearSelection();
   editingCutId.value = null;
   ghostCut.value = null;
@@ -238,6 +252,7 @@ export function clearSelection(): void {
   if (selection.value.size) selection.value = new Set();
   if (selectionShapes.value.size) selectionShapes.value = new Map();
   if (selectedCutIds.value.size) selectedCutIds.value = new Set();
+  if (pasteMode.value) pasteMode.value = false;
 }
 
 export function toggleCell(k: CellKey): void {
@@ -511,6 +526,10 @@ export function beginEditCut(cutId: string | null): void {
   if (cutId) clearSelection();
 }
 
+export function setCutDepthAction(cutId: string, depth: number): void {
+  editDoc((doc) => setCutDepth(doc, cutId, depth));
+}
+
 export function updateCut(cutId: string, op: "depth+" | "depth-" | "side" | "wall" | "delete"): void {
   editDoc((doc) => {
     if (op === "depth+") return stepCutDepth(doc, cutId, 1);
@@ -621,13 +640,18 @@ export function exportProjectJson(): string {
 }
 export async function importProjectJson(text: string): Promise<boolean> {
   try {
-    const p = loadProject(JSON.parse(text));
-    const fresh: Project = { ...p, id: p.id || createProject().id, updatedAt: Date.now() };
+    const raw = JSON.parse(text) as Record<string, unknown>;
+    // legacy 單檔存檔（grid-market-v4）：有 zones/cells、沒有 doc/schemaVersion
+    const isLegacy =
+      raw && typeof raw === "object" && !raw.doc && !raw.schemaVersion && raw.cells && raw.zones;
+    const p = isLegacy ? await projectFromLegacyState(raw as LegacyState) : loadProject(raw);
+    const fresh: Project = { ...p, id: createProject().id, updatedAt: Date.now() };
     setProject(fresh);
     await persistNow();
     await refreshProjectList();
     return true;
-  } catch {
+  } catch (e) {
+    console.error("importProjectJson", e);
     return false;
   }
 }

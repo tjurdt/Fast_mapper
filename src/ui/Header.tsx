@@ -36,7 +36,7 @@ export function Header({ onMenu }: { onMenu: () => void }) {
       </div>
 
       <button
-        class="icon ghost"
+        class="icon ghost only-desktop"
         disabled={!store.canUndo.value}
         aria-label={t("editor.undo")}
         onClick={store.undo}
@@ -44,7 +44,7 @@ export function Header({ onMenu }: { onMenu: () => void }) {
         ↶
       </button>
       <button
-        class="icon ghost"
+        class="icon ghost only-desktop"
         disabled={!store.canRedo.value}
         aria-label={t("editor.redo")}
         onClick={store.redo}

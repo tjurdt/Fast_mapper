@@ -171,6 +171,24 @@
 - **桌機字級 / 按鈕再放大**（`@media (min-width: 960px)` 專屬區塊）
 - `tests/` —— 90 個測試（+5）
 
+## Phase 11 — 匯入修復 + 手機動作列／控制塢重整 ✅
+
+- **修好 legacy 單檔 JSON 匯入**：`importProjectJson` 偵測 `{zones,cells}` 且無
+  `doc/schemaVersion` → 走 `projectFromLegacyState`；匯入成功後自動關設定對話框
+- **手機動作列**：拿掉整條白色襯底，改成貼底單列、可橫向捲動、按鈕各自帶陰影；
+  工具列每顆按鈕更矮、字縮到 ~0.72rem
+- **`.mobiledock`**：手機右下浮動控制塢（返回／重作／圖例），隨動作列開啟上抬；
+  header 的返回／重作在手機隱藏（`.only-desktop`）
+- **切線設定列**：`深度` ± 步進 → `加網格` 下拉（0–8）；`刪除切線` → `刪除`；
+  畫完線條自動選取新線並開啟設定列（`cut.ts` onDragEnd → `beginEditCut`）
+- **「選取」模式複製 → 貼上流程**：`複製` 按鈕存進剪貼簿並切到
+  `貼上／取消複製／完成`；點任一格設定貼上位置再按「貼上」（`store.pasteMode`
+  signal + `ToolContext.pasteMode`）；方向鍵盤在手機縮小為 ~½
+- **手機對話框置中**：移除 mobile 的 bottom-sheet override，所有 `Dialog` 一律置中
+- **圖例分頁可新增分類**：`Legend` 內建色票 + 名稱 + `＋`，以及「管理分類」→ 開
+  `CategoryModal`；既有分類色票可直接點開改色
+- `tests/` —— 91 個測試（+1）
+
 ## 驗證清單
 
 - [ ] 舊 `grid-market-v4` localStorage 內容 → 自動匯入為「東港華僑市場」專案，

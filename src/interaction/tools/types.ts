@@ -24,6 +24,8 @@ export interface ToolContext {
   selection: ReadonlySet<CellKey>;
   editingCutId: string | null;
   activeFeatureId: string | null;
+  /** 「選取」模式：正在進行「複製 → 點格 → 貼上」流程。 */
+  pasteMode: boolean;
   resolve(p: GesturePoint): ResolvedPoint;
   /** 影像單位容差（約等於 26 螢幕像素），給「靠近某條線」判定用。 */
   hitTolerance(): number;
@@ -39,7 +41,7 @@ export interface ToolActions {
   clearSelection(): void;
   eraseSelection(): void;
   inspectFeature(id: string | null): void;
-  addWall(seg: { ax: number; ay: number; bx: number; by: number }): void;
+  addWall(seg: { ax: number; ay: number; bx: number; by: number }): string;
   beginEditCut(cutId: string | null): void;
   moveCutEndpoint(cutId: string, end: "a" | "b", x: number, y: number): void;
   /** 封閉區洪水框選；失敗回傳原因字串。 */

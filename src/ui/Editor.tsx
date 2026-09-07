@@ -22,6 +22,7 @@ type SheetId = "assign" | "cell" | "settings" | "cats" | "baseimg" | "export" | 
 
 export function Editor() {
   const [sheet, setSheet] = useState<SheetId>(null);
+  const [catsReturn, setCatsReturn] = useState<SheetId>("settings");
   const [cellKey, setCellKey] = useState<string | null>(null);
   const [featureId, setFeatureId] = useState<string | null>(null);
   const [panelOpen, setPanelOpen] = useState(false);
@@ -38,13 +39,20 @@ export function Editor() {
         setSheet("feature");
       }),
       uiEvents.on("offset-sheet", () => setSheet("offset")),
+      uiEvents.on("cats-sheet", () => {
+        setCatsReturn(null);
+        setSheet("cats");
+      }),
     ];
     return () => offs.forEach((o) => o());
   }, []);
 
   const close = () => setSheet(null);
   const barActive =
-    store.selection.value.size > 0 || store.selectedCutIds.value.size > 0 || !!store.editingCutId.value;
+    store.selection.value.size > 0 ||
+    store.selectedCutIds.value.size > 0 ||
+    !!store.editingCutId.value ||
+    store.pasteMode.value;
 
   return (
     <div class="appshell">
@@ -59,6 +67,7 @@ export function Editor() {
         </div>
       </div>
 
+      {/* 桌機：右下懸浮圖例鈕（動作列開啟時讓位） */}
       {!barActive && (
         <button
           class="panel-fab"
@@ -70,6 +79,29 @@ export function Editor() {
         </button>
       )}
 
+      {/* 手機：返回／重作／圖例，隨底部工具列上抬 */}
+      <div class={barActive ? "mobiledock raised" : "mobiledock"} hidden={panelOpen}>
+        <button
+          class="mdock-btn"
+          disabled={!store.canUndo.value}
+          aria-label={t("editor.undo")}
+          onClick={store.undo}
+        >
+          ↶
+        </button>
+        <button
+          class="mdock-btn"
+          disabled={!store.canRedo.value}
+          aria-label={t("editor.redo")}
+          onClick={store.redo}
+        >
+          ↷
+        </button>
+        <button class="mdock-btn" onClick={() => setPanelOpen(!panelOpen)} aria-label={t("panel.toggle")}>
+          <LegendIcon size={18} />
+        </button>
+      </div>
+
       <ToastHost />
 
       {sheet === "assign" && <AssignSheet onClose={close} />}
@@ -79,12 +111,15 @@ export function Editor() {
       {sheet === "settings" && (
         <SettingsSheet
           onClose={close}
-          onCats={() => setSheet("cats")}
+          onCats={() => {
+            setCatsReturn("settings");
+            setSheet("cats");
+          }}
           onBaseImage={() => setSheet("baseimg")}
           onExport={() => setSheet("export")}
         />
       )}
-      {sheet === "cats" && <CategoryModal onClose={() => setSheet("settings")} />}
+      {sheet === "cats" && <CategoryModal onClose={() => setSheet(catsReturn)} />}
       {sheet === "baseimg" && <BaseImageSheet onClose={() => setSheet("settings")} />}
       {sheet === "export" && <ExportSheet onClose={() => setSheet("settings")} />}
     </div>

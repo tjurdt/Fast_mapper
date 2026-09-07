@@ -470,6 +470,32 @@ button.danger {
   box-shadow: var(--shadow);
   padding: 0.6rem 1rem;
 }
+.actionbar .dpad {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+.actionbar .gridadd {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.35rem 0.55rem 0.35rem 0.7rem;
+  background: var(--panel);
+  border: 1px solid var(--line-strong);
+  border-radius: 11px;
+  box-shadow: var(--shadow);
+  white-space: nowrap;
+  font-weight: 600;
+}
+.actionbar .gridadd select {
+  padding: 0.3rem 0.4rem;
+  font-weight: 600;
+}
+
+/* 手機浮動控制塢（桌機隱藏） */
+.mobiledock {
+  display: none;
+}
 
 .targetbar {
   gap: 10px;
@@ -667,6 +693,25 @@ button.danger {
   flex: 0 0 auto;
   font-size: 1.05rem;
 }
+input.sw {
+  padding: 0;
+  cursor: pointer;
+  background: none;
+}
+.lg-add {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-top: 0.4rem;
+}
+.lg-add .field {
+  flex: 1;
+  min-width: 0;
+}
+.lg-manage {
+  margin-top: 0.9rem;
+  width: 100%;
+}
 
 /* ---- dialogs (置中懸浮) ---- */
 .dialog-scrim {
@@ -796,42 +841,54 @@ button.danger {
   .sidewrap.open {
     transform: none;
   }
-  .panel-fab {
-    display: flex;
-  }
   .sp-done {
     display: inline-flex;
   }
 
-  /* 動作列：整條貼底、按鈕水平等分 */
+  /* 動作列：貼底單列、可橫向捲動、無襯底，按鈕各自帶陰影 */
   .actionbar {
-    left: 0;
-    right: 0;
-    bottom: 0;
+    left: 8px;
+    right: 8px;
     transform: none;
+    bottom: calc(10px + env(safe-area-inset-bottom));
     max-width: none;
-    gap: 0;
-    padding: 0.5rem 0.5rem calc(0.5rem + env(safe-area-inset-bottom));
-    background: var(--panel);
-    border-top: 1px solid var(--line-strong);
-    box-shadow: 0 -6px 22px rgba(0, 0, 0, 0.16);
+    gap: 6px;
+    padding: 2px;
+    background: none;
+    border: 0;
+    box-shadow: none;
     flex-wrap: nowrap;
+    justify-content: flex-start;
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+  .actionbar::-webkit-scrollbar {
+    display: none;
+  }
+  .actionbar > * {
+    flex: 0 0 auto;
   }
   .actionbar > button {
-    flex: 1 1 0;
-    box-shadow: none;
+    box-shadow: var(--shadow);
     border-radius: 10px;
-    margin: 0 3px;
-    padding: 0.7rem 0.3rem;
+    padding: 0.55rem 0.85rem;
+    font-size: 0.9rem;
   }
-  .actionbar .depthctl,
-  .actionbar .cyclebtn {
-    box-shadow: none;
-    flex: 1 1 0;
-    margin: 0 3px;
+  .actionbar .cyclebtn,
+  .actionbar .gridadd {
+    box-shadow: var(--shadow);
   }
-  .actionbar .depthctl {
-    justify-content: center;
+  .actionbar .gridadd {
+    padding: 0.3rem 0.45rem 0.3rem 0.6rem;
+    font-size: 0.86rem;
+  }
+  .actionbar .dpad {
+    gap: 3px;
+  }
+  .actionbar .dirbtn {
+    padding: 0.32rem 0.42rem;
+    font-size: 0.85rem;
+    min-width: 1.7rem;
   }
   .targetbar {
     left: 0;
@@ -844,35 +901,62 @@ button.danger {
   .toast {
     bottom: 120px;
   }
-  .dialog-scrim {
-    align-items: flex-end;
-    padding: 0;
-  }
-  .dialog {
-    border-radius: 16px 16px 0 0;
-    width: 100%;
-  }
   .toolbar {
-    padding: 0.5rem 0.6rem;
-    gap: 0.4rem;
+    padding: 0.28rem 0.5rem;
+    gap: 0.3rem;
   }
   .toolbar .tool {
     flex: 1 1 0;
     min-width: 0;
     justify-content: center;
-    padding: 0.6rem 0.3rem;
-    font-size: 0.95rem;
+    gap: 0.22rem;
+    padding: 0.32rem 0.25rem;
+    font-size: 0.72rem;
+    border-radius: 8px;
+  }
+  .toolbar .tool .tool-ic {
+    font-size: 0.85em;
   }
   .topbar {
     gap: 0.25rem;
     padding: 0.4rem 0.55rem;
+  }
+  .topbar .only-desktop {
+    display: none;
   }
   .view-seg button {
     padding: 0.4rem 0.7rem;
   }
   .proj-name {
     font-size: 1rem;
-    max-width: 34vw;
+    max-width: 40vw;
+  }
+
+  /* 手機浮動控制塢：返回／重作／圖例，隨動作列上抬 */
+  .mobiledock {
+    position: fixed;
+    right: 10px;
+    bottom: calc(12px + env(safe-area-inset-bottom));
+    z-index: 44;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    transition: bottom 0.18s ease;
+  }
+  .mobiledock.raised {
+    bottom: calc(60px + env(safe-area-inset-bottom));
+  }
+  .mdock-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 40px;
+    height: 40px;
+    border-radius: 20px;
+    background: var(--panel);
+    border: 1px solid var(--line-strong);
+    box-shadow: var(--shadow);
+    font-size: 1.05rem;
   }
 }
 

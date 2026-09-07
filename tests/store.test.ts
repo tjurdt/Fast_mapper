@@ -36,6 +36,27 @@ describe("store bootstrap", () => {
     expect(store.geometry.value).not.toBeNull();
   });
 
+  it("importProjectJson 認得 legacy 單檔存檔格式", async () => {
+    delete (globalThis as Record<string, unknown>).localStorage;
+    store._setAdapterForTests(new MemoryAdapter());
+    await store.bootstrap();
+    const legacy: LegacyState = {
+      taxonomyVersion: 4,
+      gridW: 156,
+      gridH: 54,
+      zones: [{ id: "z1", name: "熟食區", color: "#ED7D31" }],
+      cats: [{ id: "c1", name: "熟食區", color: "#ED7D31" }],
+      shops: [{ id: "s1", name: "阿明", cat: "c1" }],
+      cells: { "0_2": { cat: "c1", shop: "s1" } },
+      cuts: [],
+    };
+    const ok = await store.importProjectJson(JSON.stringify(legacy));
+    expect(ok).toBe(true);
+    expect(store.project.value?.name).toBe("東港華僑市場");
+    expect(store.project.value?.doc.features).toHaveLength(1);
+    expect(store.project.value?.doc.cells["0_2"]?.feature).toBe("s1");
+  });
+
   it("沒有 legacy 存檔時從範本建立", async () => {
     delete (globalThis as Record<string, unknown>).localStorage;
     const adapter = new MemoryAdapter();

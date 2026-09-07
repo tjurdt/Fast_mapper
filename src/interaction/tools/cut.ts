@@ -57,7 +57,13 @@ export const cutTool: Tool = {
     ctx.transient.setGhostCut(null);
     if (mode !== "wall") return;
     if (from.vertex.x === to.vertex.x && from.vertex.y === to.vertex.y) return;
-    ctx.actions.addWall({ ax: from.vertex.x, ay: from.vertex.y, bx: to.vertex.x, by: to.vertex.y });
+    const id = ctx.actions.addWall({
+      ax: from.vertex.x,
+      ay: from.vertex.y,
+      bx: to.vertex.x,
+      by: to.vertex.y,
+    });
+    if (id) ctx.actions.beginEditCut(id); // 畫完自動選取新線條、開啟設定列
   },
 
   onDeactivate(ctx) {

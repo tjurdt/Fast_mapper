@@ -48,6 +48,9 @@ export const zhHant = {
   "sel.done": "完成",
   "sel.clear": "取消選取",
   "sel.empty": "點牆或區域來選取",
+  "sel.paste": "貼上",
+  "sel.pasteCancel": "取消複製",
+  "sel.pasteHint": "點一個格子當貼上位置，再按「貼上」",
 
   "offset.title": "位移",
   "offset.h": "水平（＋右／−左）",
@@ -73,15 +76,16 @@ export const zhHant = {
 
   "cut.title": "切線設定",
   "cut.open": "透明",
-  "cut.depthUp": "增加深度",
-  "cut.depthDown": "減少深度",
-  "cut.depth": "深度",
+  "cut.depthUp": "多一排",
+  "cut.depthDown": "少一排",
+  "cut.depth": "加網格",
+  "cut.depthN": "加 {n} 排",
   "cut.side": "展開方向",
   "cut.side.-1": "上側",
   "cut.side.1": "下側",
   "cut.side.0": "雙側",
   "cut.wall": "實牆",
-  "cut.delete": "刪除切線",
+  "cut.delete": "刪除",
   "cut.done": "完成",
 
   "legend.title": "圖例",
@@ -89,6 +93,8 @@ export const zhHant = {
   "legend.actual": "{category}",
   "legend.facility": "設施",
   "legend.count": "{n}",
+  "legend.addCat": "新增分類",
+  "legend.manage": "管理分類",
 
   "facility.label": "設施 icon",
   "facility.none": "（無）",
@@ -126,6 +132,7 @@ export const zhHant = {
   "settings.cats": "管理分區與分類",
   "settings.export": "匯出",
   "settings.importJson": "匯入 JSON",
+  "settings.importFailed": "匯入失敗：檔案格式無法辨識",
   "settings.exportJson": "備份 JSON",
 
   "common.close": "關閉",

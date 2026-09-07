@@ -132,12 +132,21 @@ function Legend() {
       <ul>
         {p.doc.categories.map((c) => (
           <li key={c.id}>
-            <span class="sw" style={{ background: c.color }} />
+            <input
+              class="sw"
+              type="color"
+              value={c.color}
+              aria-label={c.name}
+              onChange={(e) =>
+                store.updateCategoryAction(c.id, { color: (e.target as HTMLInputElement).value })
+              }
+            />
             <span class="lg-nm">{c.name}</span>
             <span class="muted">{catCount[c.id] ?? 0}</span>
           </li>
         ))}
       </ul>
+      <AddCategoryRow />
       {facs.length > 0 && (
         <>
           <h4>{t("legend.facility")}</h4>
@@ -152,6 +161,39 @@ function Legend() {
           </ul>
         </>
       )}
+      <button class="lg-manage" onClick={() => uiEvents.emit("cats-sheet")}>
+        {t("legend.manage")}
+      </button>
+    </div>
+  );
+}
+
+function AddCategoryRow() {
+  const [name, setName] = useState("");
+  const [color, setColor] = useState("#4c9aff");
+  const add = () => {
+    store.addCategoryAction(name.trim() || t("legend.addCat"), color);
+    setName("");
+  };
+  return (
+    <div class="lg-add">
+      <input
+        class="sw"
+        type="color"
+        value={color}
+        aria-label={t("legend.addCat")}
+        onInput={(e) => setColor((e.target as HTMLInputElement).value)}
+      />
+      <input
+        class="field"
+        placeholder={t("legend.addCat")}
+        value={name}
+        onInput={(e) => setName((e.target as HTMLInputElement).value)}
+        onKeyDown={(e) => e.key === "Enter" && add()}
+      />
+      <button class="icon" aria-label={t("legend.addCat")} onClick={add}>
+        ＋
+      </button>
     </div>
   );
 }

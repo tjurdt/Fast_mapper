@@ -527,17 +527,44 @@ export function ExportSheet({ onClose }: { onClose: () => void }) {
   const [baseOpacity, setBaseOpacity] = useState(90);
   const [includeList, setIncludeList] = useState(true);
   const [omitLabels, setOmitLabels] = useState(false);
+  const [withTitle, setWithTitle] = useState(true);
+  const [title, setTitle] = useState(store.project.value?.name ?? "");
   const [busy, setBusy] = useState("");
 
   const run = async (fmt: "png" | "svg" | "pdf" | "xlsx") => {
     setBusy(fmt);
-    const ok = await store.exportMap(fmt, { mode, baseOpacity, includeList, omitLabels });
+    const ok = await store.exportMap(fmt, {
+      mode,
+      baseOpacity,
+      includeList,
+      omitLabels,
+      title: withTitle ? title : "",
+    });
     setBusy("");
     if (!ok) alert("匯出失敗");
   };
 
   return (
     <Dialog title={t("settings.export")} onClose={onClose}>
+      <label class="check">
+        <input
+          type="checkbox"
+          checked={withTitle}
+          onChange={(e) => setWithTitle((e.target as HTMLInputElement).checked)}
+        />
+        {t("export.withTitle")}
+      </label>
+      {withTitle && (
+        <label class="fieldrow">
+          <span>{t("export.title")}</span>
+          <input
+            class="field"
+            value={title}
+            placeholder={store.project.value?.name ?? ""}
+            onInput={(e) => setTitle((e.target as HTMLInputElement).value)}
+          />
+        </label>
+      )}
       <div class="seg">
         {(["plan", "overlay", "actual"] as const).map((m) => (
           <button key={m} class={mode === m ? "on" : ""} onClick={() => setMode(m)}>

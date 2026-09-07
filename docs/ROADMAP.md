@@ -226,6 +226,36 @@
   也改暖灰
 - `tests/` —— 95 個測試（+3）
 
+## Phase 14 — 複雜地圖徹底提速 + 動作列置中 + 匯出地圖名 ✅
+
+- **`DocHistory`**：不再每次編輯都 `JSON.stringify` 整份 doc —— 堆疊直接存
+  `MapDoc` 參照（`editDoc` 產出的 doc 之後不再被改），大地圖每次編輯省 ~30–40ms
+- **`editDoc` 契約**：fn 回傳 `null` = no-op（不更新、不進歷史）—— 失敗的移動 /
+  複製不再產生假的歷史紀錄
+- **`bands.ts`**：`cutGeom` + `computeBandCover` **依切線參數逐條記憶化**。
+  非切線編輯直接命中；移動一道牆只 miss 一條、其餘 39 條沿用
+- **`MapGeometry`**：`featureKeyIndex` / `featureComponents` / `featureLabelAnchors`
+  實例內記憶化（`computeNumbers` 與 `drawContentLayer` 不再重算）；
+  `drawFeatureBorders` 跳過「四周同區域」的內部格；`bandFeatureAtPoint` 加 bbox
+  快速剔除、邊界過濾只對「靠近帶」的格做
+- **`drawActualFill`**：一般方格依顏色批次成單一 path（取代每格一次 `fillRect`）
+- **渲染分層**：`interaction`（選取框 / 端點把手）改成**螢幕大小、在 `.stage` 外**、
+  ctx 直接套視角變換 —— 拖曳端點 / 框選時每幀只清一塊螢幕大小畫布（原本清整張
+  影像大小）。base/content backing 上限降到 1.5×
+- **拖曳切線端點**：改成 transient 即時預覽（`store.cutDragPreview`），放手才
+  commit 一次 —— 不再每個 pointermove 都跑一次 editDoc（大地圖上原本會凍結）
+- store 的移動 / 複製 / 指定 / 擦除 action 用 `batch()` 包起來 → 一次重繪
+- 手勢：`MOVE_THRESHOLD` 9、`TAP_SLOP` 12 —— 觸控抖動仍算「點一下」，
+  修掉檢視模式「點物件後點空白，偶爾亂 zoom / 高亮不相關物件」
+- **動作列**：手機所有模式（網格 / 線條 / 選取）一律 `space-between`，
+  左右邊距對稱且與網格模式相同（10px）
+- **匯出**：可勾選「在圖上加地圖名稱」（預設開、預設帶專案名）；
+  匯出解析度上限拉低（9M px / 1.6×）→ 大地圖匯出更快
+- `MAX_DPR` 相關 + `engine.resize()` 尺寸沒變就略過
+- `tests/` —— 96 個測試（+1）
+- 實測（4× CPU throttle 模擬中階手機、5148 格 / 143 店家 / 40 切線）：
+  物件移動 ~325ms（原 ~950ms）、端點拖曳 ~32fps（原 ~3fps）、載入 ~800ms
+
 ## 驗證清單
 
 - [ ] 舊 `grid-market-v4` localStorage 內容 → 自動匯入為「東港華僑市場」專案，

@@ -5,7 +5,11 @@
 import { render } from "preact";
 import "./styles.css";
 import { App } from "./ui/App";
-import { bootstrap } from "./store";
+import * as store from "./store";
 
 render(<App />, document.getElementById("app")!);
-void bootstrap();
+void store.bootstrap();
+
+if (import.meta.env.DEV) {
+  (window as unknown as { __store: typeof store }).__store = store;
+}

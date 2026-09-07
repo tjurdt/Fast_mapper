@@ -40,8 +40,16 @@ export function renderComposite(
   ctx.fillStyle = "#fff";
   ctx.fillRect(0, 0, layout.width, layout.totalH);
 
+  if (opts.title) {
+    ctx.fillStyle = "#0e3b43";
+    ctx.font = "700 44px 'Noto Sans TC',sans-serif";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillText(opts.title, layout.width / 2, layout.titleH / 2, layout.width - 80);
+  }
+
   ctx.save();
-  ctx.translate(layout.padX, layout.padY);
+  ctx.translate(layout.padX, layout.titleH + layout.padY);
 
   if (opts.mode === "plan" || opts.mode === "overlay") {
     drawPlanFill(ctx, doc, dims, opts.baseOpacity / 100);

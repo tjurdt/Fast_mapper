@@ -112,6 +112,8 @@ export function setTool(id: string): void {
 export const dragRect = signal<readonly [number, number, number, number] | null>(null);
 export const ghostCut = signal<readonly [number, number, number, number] | null>(null);
 export const editingCutId = signal<string | null>(null);
+/** 拖曳切線端點時的即時預覽（格為單位）；放手才 commit 進文件。 */
+export const cutDragPreview = signal<readonly [number, number, number, number] | null>(null);
 
 export const ui = {
   legendOpen: signal(false),
@@ -150,6 +152,7 @@ export const scene = computed<Scene | null>(() => {
     selectionShapes: selectionShapes.value,
     selectedCutIds: selectedCutIds.value,
     editingCut: editingCutId.value ? (p.doc.cuts.find((c) => c.id === editingCutId.value) ?? null) : null,
+    cutDragPreview: cutDragPreview.value,
   };
 });
 
@@ -196,12 +199,17 @@ function setProject(p: Project, { resetHistory = true } = {}): void {
 
 // ---- actions ----
 
-/** 套用一次文件變更。fn 收到深拷貝的 doc，回傳新 doc（或原地改後回傳）。 */
-export function editDoc(fn: (doc: MapDoc) => MapDoc | void, opts: { record?: boolean } = {}): void {
+/**
+ * 套用一次文件變更。fn 收到深拷貝的 doc，回傳新 doc（或原地改後回傳 void）。
+ * 回傳 `null` 代表「這次不算數」—— 不更新、不進歷史（給失敗的移動 / 複製用）。
+ */
+export function editDoc(fn: (doc: MapDoc) => MapDoc | void | null, opts: { record?: boolean } = {}): void {
   const p = project.value;
   if (!p) return;
   const draft = cloneDoc(p.doc);
-  const next = fn(draft) ?? draft;
+  const ret = fn(draft);
+  if (ret === null) return; // 明確 no-op
+  const next = ret ?? draft;
   const updated: Project = { ...p, doc: next, updatedAt: Date.now() };
   project.value = updated;
   if (opts.record !== false) history.record(next);
@@ -299,8 +307,10 @@ export function assignSelection(args: AssignArgs): void {
   if (!selection.value.size) return;
   const keys = [...selection.value];
   const shapes = selectionShapes.value.size ? new Map(selectionShapes.value) : null;
-  editDoc((doc) => assignCells(doc, keys, { ...args, shapes }));
-  clearSelection();
+  batch(() => {
+    editDoc((doc) => assignCells(doc, keys, { ...args, shapes }));
+    clearSelection();
+  });
 }
 
 export interface OverlapMark {
@@ -362,8 +372,10 @@ export function selectionOverlapMarks(): OverlapMark[] {
 export function eraseSelection(): void {
   if (!selection.value.size) return;
   const keys = [...selection.value];
-  editDoc((doc) => eraseCells(doc, keys));
-  clearSelection();
+  batch(() => {
+    editDoc((doc) => eraseCells(doc, keys));
+    clearSelection();
+  });
 }
 
 export function moveSelectionBy(dir: MoveDir): { ok: boolean; reason?: string } {
@@ -371,11 +383,13 @@ export function moveSelectionBy(dir: MoveDir): { ok: boolean; reason?: string } 
   if (!p || !selection.value.size) return { ok: false, reason: "沒有選取" };
   const keys = [...selection.value];
   let result: MoveResult = { ok: false };
-  editDoc((doc) => {
-    result = moveSelection(doc, keys, dir);
-    return result.ok ? doc : undefined;
+  batch(() => {
+    editDoc((doc) => {
+      result = moveSelection(doc, keys, dir);
+      return result.ok ? doc : null;
+    });
+    if (result.ok && result.keys) selection.value = new Set(result.keys);
   });
-  if (result.ok && result.keys) selection.value = new Set(result.keys);
   return { ok: result.ok, ...(result.reason ? { reason: result.reason } : {}) };
 }
 
@@ -394,11 +408,13 @@ export function copySelectionBy(dir: MoveDir, distance: number): { ok: boolean; 
   const [ur, uc] = DELTA[dir];
   const keys = [...selection.value];
   let result: MoveResult = { ok: false };
-  editDoc((doc) => {
-    result = copySelection(doc, keys, ur * n, uc * n);
-    return result.ok ? doc : undefined;
+  batch(() => {
+    editDoc((doc) => {
+      result = copySelection(doc, keys, ur * n, uc * n);
+      return result.ok ? doc : null;
+    });
+    if (result.ok && result.keys) selection.value = new Set(result.keys);
   });
-  if (result.ok && result.keys) selection.value = new Set(result.keys);
   return { ok: result.ok, ...(result.reason ? { reason: result.reason } : {}) };
 }
 
@@ -539,11 +555,13 @@ export function moveObjectsBy(dx: number, dy: number): { ok: boolean; reason?: s
   if (!hasObjSelection()) return { ok: false, reason: "沒有選取物件" };
   const sel = currentObjSelection();
   let result: MoveResult = { ok: false };
-  editDoc((doc) => {
-    result = moveObjects(doc, sel, dx, dy);
-    return result.ok ? doc : undefined;
+  batch(() => {
+    editDoc((doc) => {
+      result = moveObjects(doc, sel, dx, dy);
+      return result.ok ? doc : null;
+    });
+    if (result.ok && result.keys) selection.value = new Set(result.keys);
   });
-  if (result.ok && result.keys) selection.value = new Set(result.keys);
   return { ok: result.ok, ...(result.reason ? { reason: result.reason } : {}) };
 }
 
@@ -557,7 +575,7 @@ export function copyObjectsBy(dx: number, dy: number): { ok: boolean; reason?: s
   };
   editDoc((doc) => {
     res = copyObjects(doc, sel, dx, dy);
-    return res.ok ? doc : undefined;
+    return res.ok ? doc : null;
   });
   if (res.ok) {
     batch(() => {
@@ -657,6 +675,7 @@ export function addWallSegment(seg: { ax: number; ay: number; bx: number; by: nu
 
 export function beginEditCut(cutId: string | null): void {
   editingCutId.value = cutId;
+  if (cutDragPreview.value) cutDragPreview.value = null;
   if (cutId) clearSelection();
 }
 

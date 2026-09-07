@@ -6,7 +6,7 @@
 import { cellShape } from "../core/cells";
 import { cutGeom } from "../core/bands";
 import { keyRC } from "../core/keys";
-import type { MapDoc } from "../core/types";
+import type { CellPoly, MapDoc } from "../core/types";
 import type { MapGeometry } from "../core/geometry";
 import { clipOutsideQuads, fillCellPoly, fillQuad, hexA } from "./draw2d";
 import type { SceneDims } from "./scene";
@@ -48,21 +48,32 @@ export function drawActualFill(
   const color = new Map(doc.categories.map((c) => [c.id, c.color]));
   ctx.save();
   clipOutsideQuads(ctx, geo.bandActualQuads(), dims.imgW, dims.imgH);
-  const byColor = new Map<string, string[]>();
+
+  // 一般矩形格：依顏色批次成單一 path（大地圖上比每格一次 fillRect 快很多）
+  const rects = new Map<string, [number, number][]>();
+  const shaped: { r: number; c: number; poly: CellPoly; col: string }[] = [];
   for (const k in doc.cells) {
     const d = doc.cells[k]!;
     if (!d.cat || k.charCodeAt(0) === 66 || geo.cellCovered(k)) continue;
     const col = color.get(d.cat);
     if (!col) continue;
-    (byColor.get(col) ?? byColor.set(col, []).get(col)!).push(k);
-  }
-  byColor.forEach((keys, col) => {
-    const rgba = hexA(col, opacity);
-    for (const k of keys) {
-      const [r, c] = keyRC(k);
-      fillCellPoly(ctx, r, c, cellShape(doc.cells[k]), dims.cw, dims.ch, rgba);
+    const [r, c] = keyRC(k);
+    const poly = cellShape(d);
+    if (poly) {
+      if (poly.length >= 3) shaped.push({ r, c, poly, col });
+    } else {
+      (rects.get(col) ?? rects.set(col, []).get(col)!).push([r, c]);
     }
+  }
+  const cw = dims.cw;
+  const ch = dims.ch;
+  rects.forEach((list, col) => {
+    ctx.fillStyle = hexA(col, opacity);
+    ctx.beginPath();
+    for (const [r, c] of list) ctx.rect(c * cw, r * ch, cw + 0.6, ch + 0.6);
+    ctx.fill();
   });
+  for (const s of shaped) fillCellPoly(ctx, s.r, s.c, s.poly, cw, ch, hexA(s.col, opacity));
   ctx.restore();
 }
 
@@ -195,11 +206,10 @@ export function drawFeatureLabels(
 ): void {
   const idx = geo.featureKeyIndex();
   for (const f of geo.doc.features) {
-    const keys = idx.get(f.id);
-    if (!keys) continue;
+    if (!idx.has(f.id)) continue;
     const num = numbers[f.id];
     const icon = opts.facilityIcon?.(f.id);
-    for (const [cx, cy] of geo.featureLabelAnchors(f.id, keys)) {
+    for (const [cx, cy] of geo.featureLabelAnchors(f.id)) {
       const r = opts.numberRadius;
       if (icon) {
         ctx.fillStyle = "#fff";

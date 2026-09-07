@@ -10,7 +10,7 @@
 import type { Cell, CellKey, Cut, MapDoc, Point } from "./types";
 import { bandKey, gridKey, isBandKey, keyRC, parseBandKey } from "./keys";
 import { cellHidden, cellShape, cellSideIntervals } from "./cells";
-import { bandLocate, bandOuter, bandQuad, computeBandCover, cutGeom, type CutGeom } from "./bands";
+import { bandLocate, bandOuter, bandQuad, computeBandCover, cutGeomCached, type CutGeom } from "./bands";
 import { clamp, clipPolyToRect, pointInPoly, polyArea, segCrossesRect, subtractIntervals } from "./poly";
 
 const SQUARE: Point[] = [
@@ -31,7 +31,8 @@ export class MapGeometry {
   readonly bandCover: ReadonlySet<string>;
 
   private readonly cutById: Map<string, Cut>;
-  private readonly geomCache = new Map<string, CutGeom>();
+  private _featureKeyIndex: Map<string, CellKey[]> | null = null;
+  private readonly _components = new Map<string, CellKey[][]>();
 
   constructor(doc: MapDoc) {
     this.doc = doc;
@@ -54,13 +55,51 @@ export class MapGeometry {
     this.bandCover = computeBandCover(doc.cuts, this.cw, this.ch, this.gridW, this.gridH);
   }
 
-  private geomFor(cut: Cut): CutGeom {
-    let g = this.geomCache.get(cut.id);
-    if (!g) {
-      g = cutGeom(cut, this.cw, this.ch);
-      this.geomCache.set(cut.id, g);
+  private _bandNear: Set<string> | null = null;
+  /** 「靠近帶」的一般格：只有這些格在畫邊界時才需要做昂貴的 bandFeatureAtPoint 過濾。 */
+  private bandNear(): Set<string> {
+    if (this._bandNear) return this._bandNear;
+    const near = new Set<string>();
+    for (const k of this.bandCover) {
+      const [r, c] = keyRC(k);
+      for (let dr = -1; dr <= 1; dr++) for (let dc = -1; dc <= 1; dc++) near.add(gridKey(r + dr, c + dc));
     }
-    return g;
+    for (const dc of this.deepCuts()) {
+      const c0 = Math.floor(dc.bx0 / this.cw) - 1;
+      const c1 = Math.ceil(dc.bx1 / this.cw) + 1;
+      const r0 = Math.floor(dc.by0 / this.ch) - 1;
+      const r1 = Math.ceil(dc.by1 / this.ch) + 1;
+      for (let r = r0; r <= r1; r++) for (let c = c0; c <= c1; c++) near.add(gridKey(r, c));
+    }
+    this._bandNear = near;
+    return near;
+  }
+
+  private geomFor(cut: Cut): CutGeom {
+    return cutGeomCached(cut, this.cw, this.ch);
+  }
+
+  private _deepCuts: { id: string; g: CutGeom; bx0: number; bx1: number; by0: number; by1: number }[] | null =
+    null;
+  /** 有 depth 的切線 + 其展開帶的影像 bbox（給命中測試快速剔除）。 */
+  private deepCuts() {
+    if (this._deepCuts) return this._deepCuts;
+    const out: { id: string; g: CutGeom; bx0: number; bx1: number; by0: number; by1: number }[] = [];
+    for (const cut of this.doc.cuts) {
+      if (!cut.depth) continue;
+      const g = this.geomFor(cut);
+      const pts = bandOuter(g);
+      out.push({
+        id: cut.id,
+        g,
+        bx0: Math.min(pts[0]![0], pts[1]![0], pts[2]![0], pts[3]![0]),
+        bx1: Math.max(pts[0]![0], pts[1]![0], pts[2]![0], pts[3]![0]),
+        by0: Math.min(pts[0]![1], pts[1]![1], pts[2]![1], pts[3]![1]),
+        by1: Math.max(pts[0]![1], pts[1]![1], pts[2]![1], pts[3]![1]),
+      });
+    }
+    this._deepCuts = out;
+    return out;
   }
 
   cell(k: CellKey): Cell | undefined {
@@ -177,6 +216,7 @@ export class MapGeometry {
 
   /** featureId → 該 feature 的可見格鍵陣列。 */
   featureKeyIndex(): Map<string, CellKey[]> {
+    if (this._featureKeyIndex) return this._featureKeyIndex;
     const m = new Map<string, CellKey[]>();
     for (const k in this.doc.cells) {
       const d = this.doc.cells[k]!;
@@ -185,20 +225,20 @@ export class MapGeometry {
       if (a) a.push(k);
       else m.set(d.feature, [k]);
     }
+    this._featureKeyIndex = m;
     return m;
   }
 
   featureKeys(id: string): CellKey[] {
-    const out: CellKey[] = [];
-    for (const k in this.doc.cells) {
-      const d = this.doc.cells[k]!;
-      if (d.feature === id && this.cellVisible(k, d)) out.push(k);
-    }
-    return out;
+    return this.featureKeyIndex().get(id) ?? [];
   }
 
   /** 把一個 feature 的格子拆成連通分量（band 格透過 gridKeysUnderQuad 與一般格互連）。 */
   featureComponents(id: string, keys?: CellKey[]): CellKey[][] {
+    if (!keys) {
+      const cached = this._components.get(id);
+      if (cached) return cached;
+    }
     const pending = new Set(keys ?? this.featureKeys(id));
     const crossLinks = new Map<string, string[]>();
     const link = (a: string, b: string) => {
@@ -225,6 +265,7 @@ export class MapGeometry {
       }
       out.push(cells);
     }
+    if (!keys) this._components.set(id, out);
     return out;
   }
 
@@ -242,10 +283,17 @@ export class MapGeometry {
     return best!.p;
   }
 
+  private readonly _anchors = new Map<string, Point[]>();
   featureLabelAnchors(id: string, keys?: CellKey[]): Point[] {
-    return this.featureComponents(id, keys)
+    if (!keys) {
+      const c = this._anchors.get(id);
+      if (c) return c;
+    }
+    const out = this.featureComponents(id, keys)
       .map((c) => this.componentAnchor(c))
       .filter((p): p is Point => !!p);
+    if (!keys) this._anchors.set(id, out);
+    return out;
   }
 
   /** feature 所有可見格的影像座標包圍盒 [x0,y0,x1,y1]；無格則 null。 */
@@ -298,11 +346,12 @@ export class MapGeometry {
   }
 
   bandFeatureAtPoint(x: number, y: number): string | null {
-    for (const cut of this.doc.cuts) {
-      if (!cut.depth) continue;
-      const hit = bandLocate(this.geomFor(cut), x, y);
+    const deep = this.deepCuts();
+    for (const dc of deep) {
+      if (x < dc.bx0 || x > dc.bx1 || y < dc.by0 || y > dc.by1) continue; // bbox 快速剔除
+      const hit = bandLocate(dc.g, x, y);
       if (!hit) continue;
-      const d = this.doc.cells[bandKey(cut.id, hit.i, hit.j)];
+      const d = this.doc.cells[bandKey(dc.id, hit.i, hit.j)];
       if (d?.feature) return d.feature;
     }
     return null;
@@ -530,6 +579,24 @@ export class MapGeometry {
   }
 
   /** 一般格 + band 格通用的 feature 外框線段（會扣掉跨層共用邊）。 */
+  /** 一般方格且上下左右都是同一 feature 的可見方格 → 內部格，不需畫邊界。 */
+  private isInteriorCell(k: CellKey, d: Cell): boolean {
+    if (isBandKey(k) || cellShape(d)) return false;
+    const [r, c] = keyRC(k);
+    for (const [nr, nc] of [
+      [r - 1, c],
+      [r + 1, c],
+      [r, c - 1],
+      [r, c + 1],
+    ] as const) {
+      if (nr < 0 || nc < 0) return false;
+      const nk = gridKey(nr, nc);
+      const nd = this.doc.cells[nk];
+      if (!nd || nd.feature !== d.feature || cellShape(nd) || this.cellCovered(nk)) return false;
+    }
+    return true;
+  }
+
   allBorderSegments(k: CellKey, d: Cell): Segment[] {
     if (isBandKey(k)) {
       const q = this.keyQuad(k);
@@ -555,8 +622,9 @@ export class MapGeometry {
       return out;
     }
     if (this.cellCovered(k)) return [];
-    return this.featureBorderSegments(k, d).filter(
-      (g) => this.bandFeatureAtPoint((g[0] + g[2]) / 2, (g[1] + g[3]) / 2) !== d.feature,
-    );
+    if (this.isInteriorCell(k, d)) return []; // 四周都是同區域 → 無邊界，快速跳過
+    const segs = this.featureBorderSegments(k, d);
+    if (!this.deepCuts().length || !this.bandNear().has(k)) return segs; // 遠離帶 → 略過昂貴過濾
+    return segs.filter((g) => this.bandFeatureAtPoint((g[0] + g[2]) / 2, (g[1] + g[3]) / 2) !== d.feature);
   }
 }

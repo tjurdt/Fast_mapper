@@ -374,8 +374,13 @@ button.danger {
 .stage .lyr:nth-child(2) {
   z-index: 2;
 }
-.stage .lyr:nth-child(3) {
-  z-index: 3;
+/* interaction 層：螢幕大小、在 .stage 外、不吃指標事件 */
+.stagewrap > .inter {
+  position: absolute;
+  inset: 0;
+  z-index: 4;
+  pointer-events: none;
+  display: block;
 }
 
 .maphint {
@@ -987,7 +992,7 @@ input.sw {
     display: inline-flex;
   }
 
-  /* 動作列：貼底單列、可橫向捲動、無襯底，按鈕各自帶陰影 */
+  /* 動作列：貼底單列、左右邊距對稱且與網格模式相同、無襯底 */
   .actionbar {
     left: 8px;
     right: 8px;
@@ -1000,7 +1005,7 @@ input.sw {
     border: 0;
     box-shadow: none;
     flex-wrap: nowrap;
-    justify-content: flex-start;
+    justify-content: space-between;
     overflow-x: auto;
     scrollbar-width: none;
   }

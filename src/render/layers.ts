@@ -137,10 +137,11 @@ function drawGhostCut(ctx: CanvasRenderingContext2D, scene: Scene, dims: SceneDi
 function drawCutHandles(ctx: CanvasRenderingContext2D, scene: Scene, dims: SceneDims): void {
   const cut = scene.editingCut;
   if (!cut) return;
-  const ax = cut.ax * dims.cw;
-  const ay = cut.ay * dims.ch;
-  const bx = cut.bx * dims.cw;
-  const by = cut.by * dims.ch;
+  const pv = scene.cutDragPreview;
+  const ax = (pv ? pv[0] : cut.ax) * dims.cw;
+  const ay = (pv ? pv[1] : cut.ay) * dims.ch;
+  const bx = (pv ? pv[2] : cut.bx) * dims.cw;
+  const by = (pv ? pv[3] : cut.by) * dims.ch;
   ctx.strokeStyle = "#d64f27";
   ctx.lineWidth = Math.max(1.2, dims.cw * 0.2);
   ctx.setLineDash([]);

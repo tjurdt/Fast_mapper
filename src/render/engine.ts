@@ -1,11 +1,12 @@
 /**
  * MapRenderer —— 綁定三張 DOM canvas、Viewport、Scheduler 與 Scene。
  *
- * 效能策略（對齊 legacy 單檔版的順暢感）：
- *  - 三張 canvas 都畫成「整張影像大小」，疊在 `.stage` 容器裡，只光柵化一次
- *  - pan / zoom / 聚焦：**只改 `.stage` 的 CSS transform**，完全不重新光柵化
- *  - 只有文件內容改變才重畫 base / content；互動層（選取框等）便宜、每次互動重畫
- *  - backing store 尺寸受 4096 上限保護（iOS Safari），必要時降解析度
+ * 效能策略：
+ *  - `base` / `content`：畫成「整張影像大小」、放在 `.stage` 容器裡、只光柵化一次。
+ *    pan / zoom / 聚焦 只改 `.stage` 的 CSS transform，完全不重畫。
+ *  - `interaction`（選取框、切線把手…）：**螢幕大小**、放在 `.stage` 外、每次互動便宜地重畫。
+ *    這樣拖曳端點 / 框選時，每幀只清一塊螢幕大小的畫布，不會卡。
+ *  - backing store 單邊上限 4096（iOS Safari）。
  */
 import { Viewport } from "./viewport";
 import { RenderScheduler, ALL_LAYERS, type Layer } from "./scheduler";
@@ -14,7 +15,9 @@ import { drawBaseLayer, drawContentLayer, drawInteractionLayer } from "./layers"
 import { sceneDims, type Scene } from "./scene";
 
 const MAX_DPR = 2;
-const MAX_BACKING = 4096; // 單邊像素上限（iOS Safari 安全值）
+const MAX_BACKING = 4096;
+/** base/content backing 上限倍率 —— 格線地圖不需要太高解析度，壓低可省一半光柵化時間。 */
+const MAX_MAP_Q = 1.5;
 
 export interface MapRendererOptions {
   loadBlob?: (blobId: string) => Promise<Blob | null>;
@@ -27,10 +30,16 @@ export class MapRenderer {
   private readonly ctx: Record<Layer, CanvasRenderingContext2D>;
   private readonly canvas: Record<Layer, HTMLCanvasElement>;
 
-  /** backing store 相對影像單位的縮放（HiDPI，受上限保護）。 */
+  /** base/content backing 相對影像單位的縮放。 */
   private q = 1;
   private imgW = 1;
   private imgH = 1;
+  /** interaction canvas 的螢幕尺寸 + dpr。 */
+  private vw = 1;
+  private vh = 1;
+  private idpr = 1;
+  private lastW = 0;
+  private lastH = 0;
   private scene: Scene | null = null;
   private prevBlobId: string | null = null;
   private ro: ResizeObserver | null = null;
@@ -76,12 +85,12 @@ export class MapRenderer {
     this.viewport.setImageSize(d.imgW, d.imgH);
     const imgSizeChanged = d.imgW !== this.imgW || d.imgH !== this.imgH;
     if (imgSizeChanged) this.syncCanvasPixels(d.imgW, d.imgH);
+    this.syncInteractionPixels();
 
     const first = !prev;
     const docChanged = first || prev.doc !== scene.doc;
     const viewChanged = first || prev.view !== scene.view;
 
-    // 底圖圖片
     const blobId = scene.doc.baseImage?.blobId ?? null;
     let imageChanged = false;
     if (blobId !== this.prevBlobId) {
@@ -94,7 +103,7 @@ export class MapRenderer {
     if (first || imgSizeChanged) {
       this.viewport.fit(this.stageSize().w, this.stageSize().h);
       this.applyViewTransform();
-      this.scheduler.request(...ALL_LAYERS); // 首次 / 影像尺寸改變 → 全部重畫
+      this.scheduler.request(...ALL_LAYERS);
       return;
     }
 
@@ -105,22 +114,26 @@ export class MapRenderer {
     this.applyViewTransform();
   }
 
-  /** 視窗 / 容器尺寸改變：只更新視角變換，canvas 不動、不重新光柵化。 */
+  /** 視窗 / 容器尺寸改變。 */
   resize(): void {
     const { w, h } = this.stageSize();
+    if (w === this.lastW && h === this.lastH) return;
+    this.lastW = w;
+    this.lastH = h;
     this.viewport.fitBase(w);
     this.viewport.clampT(w, h);
+    this.syncInteractionPixels();
     this.applyViewTransform();
+    this.scheduler.request("interaction");
   }
 
-  /** 重設為「置中、全覽」。內容解析度與視角無關，只需移動 `.stage`。 */
   fit(): void {
     const { w, h } = this.stageSize();
     this.viewport.fit(w, h);
     this.applyViewTransform();
+    this.scheduler.request("interaction");
   }
 
-  /** 把影像座標矩形框進視野（點清單項目 → 聚焦某個命名區域）。只移動 `.stage`。 */
   frameRegion(x0: number, y0: number, x1: number, y1: number, padImg = 0): void {
     const { w, h } = this.stageSize();
     const vp = this.viewport;
@@ -134,16 +147,17 @@ export class MapRenderer {
     vp.ty = h / 2 - ((y0 + y1) / 2) * vk;
     vp.clampT(w, h);
     this.applyViewTransform();
+    this.scheduler.request("interaction");
   }
 
   private syncCanvasPixels(imgW: number, imgH: number): void {
     this.imgW = imgW;
     this.imgH = imgH;
     const dpr = Math.min(typeof devicePixelRatio === "number" ? devicePixelRatio : 1, MAX_DPR);
-    this.q = Math.min(dpr, MAX_BACKING / Math.max(imgW, imgH));
+    this.q = Math.min(dpr, MAX_MAP_Q, MAX_BACKING / Math.max(imgW, imgH));
     const pw = Math.round(imgW * this.q);
     const ph = Math.round(imgH * this.q);
-    for (const l of ALL_LAYERS) {
+    for (const l of ["base", "content"] as const) {
       const cv = this.canvas[l];
       if (cv.width !== pw || cv.height !== ph) {
         cv.width = pw;
@@ -154,7 +168,23 @@ export class MapRenderer {
     }
   }
 
-  /** `.stage` 的 CSS transform：影像座標 → 螢幕座標。pan/zoom 期間唯一要做的事。 */
+  private syncInteractionPixels(): void {
+    const { w, h } = this.stageSize();
+    this.vw = w;
+    this.vh = h;
+    this.idpr = Math.min(typeof devicePixelRatio === "number" ? devicePixelRatio : 1, MAX_DPR);
+    const cv = this.canvas.interaction;
+    const pw = Math.round(w * this.idpr);
+    const ph = Math.round(h * this.idpr);
+    if (cv.width !== pw || cv.height !== ph) {
+      cv.width = pw;
+      cv.height = ph;
+    }
+    cv.style.width = w + "px";
+    cv.style.height = h + "px";
+  }
+
+  /** `.stage` 的 CSS transform：影像座標 → 螢幕座標。 */
   applyViewTransform(): void {
     const { tx, ty } = this.viewport;
     const k = this.viewport.viewK();
@@ -162,9 +192,10 @@ export class MapRenderer {
     this.stage.dataset.vp = `${this.viewport.s.toFixed(3)},${Math.round(tx)},${Math.round(ty)}`;
   }
 
-  /** 舊名沿用：手勢期間呼叫，只更新變換。 */
+  /** 手勢期間：更新變換，並排程重畫（僅便宜的）interaction 層以維持對齊。 */
   applyLiveTransform(): void {
     this.applyViewTransform();
+    this.scheduler.request("interaction");
   }
 
   private paint(layers: ReadonlySet<Layer>): void {
@@ -174,29 +205,40 @@ export class MapRenderer {
     }
     const dims = sceneDims(this.scene.geo);
     if (layers.has("base")) {
-      this.begin("base");
+      this.beginImage("base");
       drawBaseLayer(this.ctx.base, this.scene, dims);
       if (this.scene.doc.baseImage && this.baseImage.ready) {
         this.baseImage.draw(this.ctx.base, this.scene.doc.baseImage);
       }
     }
     if (layers.has("content")) {
-      this.begin("content");
+      this.beginImage("content");
       drawContentLayer(this.ctx.content, this.scene, dims);
     }
     if (layers.has("interaction")) {
-      this.begin("interaction");
+      this.beginScreen();
       drawInteractionLayer(this.ctx.interaction, this.scene, dims);
     }
     this.applyViewTransform();
   }
 
-  private begin(l: Layer): void {
+  /** base/content：影像座標空間，backing = 影像 × q。 */
+  private beginImage(l: "base" | "content"): void {
     const ctx = this.ctx[l];
     const cv = this.canvas[l];
     ctx.setTransform(1, 0, 0, 1, 0, 0);
     ctx.clearRect(0, 0, cv.width, cv.height);
     ctx.setTransform(this.q, 0, 0, this.q, 0, 0);
+  }
+
+  /** interaction：螢幕大小畫布，ctx 直接套用「影像 → 螢幕」變換。 */
+  private beginScreen(): void {
+    const ctx = this.ctx.interaction;
+    const cv = this.canvas.interaction;
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.clearRect(0, 0, cv.width, cv.height);
+    const k = this.viewport.viewK() * this.idpr;
+    ctx.setTransform(k, 0, 0, k, this.viewport.tx * this.idpr, this.viewport.ty * this.idpr);
   }
 
   private clear(l: Layer): void {

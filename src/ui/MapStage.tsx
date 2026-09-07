@@ -99,8 +99,8 @@ export function MapStage({ onAssign, onOffset }: { onAssign: () => void; onOffse
       <div class="stage" ref={stageRef}>
         <canvas class="lyr" ref={baseRef} />
         <canvas class="lyr" ref={contentRef} />
-        <canvas class="lyr" ref={interRef} />
       </div>
+      <canvas class="lyr inter" ref={interRef} />
       <MapHint />
       <ZoomStack onZoom={zoom} onFit={() => rendererRef.current?.fit()} />
       <ActionBar onAssign={onAssign} onOffset={onOffset} />

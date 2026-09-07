@@ -140,6 +140,8 @@ export const zhHant = {
   "settings.export": "匯出",
   "settings.importJson": "匯入 JSON",
   "settings.importFailed": "匯入失敗：檔案格式無法辨識",
+  "export.withTitle": "在圖上加地圖名稱",
+  "export.title": "地圖名稱",
   "settings.exportJson": "備份 JSON",
 
   "common.close": "關閉",

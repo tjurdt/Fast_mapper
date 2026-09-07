@@ -63,6 +63,11 @@ function FeatureList() {
   if (!p.doc.features.length) return <p class="sp-empty">{tv("list.empty")}</p>;
 
   const focus = (id: string) => {
+    // 檢視工具帶進來的「只顯示這家」清單：點列 = 聚焦一次，不切換高亮狀態
+    if (reveal) {
+      uiEvents.emit("focus-feature", id);
+      return;
+    }
     const same = store.inspectedFeature.value === id;
     store.inspectFeature(same ? null : id);
     if (!same) uiEvents.emit("focus-feature", id); // 只有這裡會 zoom

@@ -23,6 +23,8 @@ export interface Scene {
   selectedCutIds: ReadonlySet<string>;
   /** 正在編輯的切線（畫出端點把手）。 */
   editingCut: Cut | null;
+  /** 拖曳端點時的即時預覽線（格為單位 [ax,ay,bx,by]）—— 不進文件、不重算幾何。 */
+  cutDragPreview: readonly [number, number, number, number] | null;
 }
 
 export interface SceneDims {

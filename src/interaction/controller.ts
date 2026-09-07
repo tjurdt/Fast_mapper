@@ -131,6 +131,7 @@ export class InteractionController {
   private readonly transient: ToolContext["transient"] = {
     setDragRect: (r) => (store.dragRect.value = r),
     setGhostCut: (s) => (store.ghostCut.value = s),
+    setCutDragPreview: (s) => (store.cutDragPreview.value = s),
   };
 
   dispose(): void {

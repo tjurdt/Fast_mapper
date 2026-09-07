@@ -44,11 +44,11 @@ describe("DocHistory", () => {
     expect(fwd?.grid.w).toBe(10);
   });
 
-  it("相同快照不進堆疊", () => {
+  it("同一個 doc 物件不進堆疊", () => {
     const h = new DocHistory();
     const a = emptyDoc();
     h.reset(a);
-    h.record(structuredClone(a));
+    h.record(a); // 相同參照 → 忽略
     expect(h.canUndo).toBe(false);
   });
 

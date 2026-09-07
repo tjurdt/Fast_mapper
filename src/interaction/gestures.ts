@@ -2,7 +2,9 @@
  * 把原始 pointer 事件轉成語意手勢。不碰 store、不碰 render —— 只回呼。
  * 移植自 legacy stagewrap 的 pointerdown/move/up 邏輯。
  */
-const MOVE_THRESHOLD = 6;
+const MOVE_THRESHOLD = 9;
+/** 起點到終點位移小於此值仍算「點一下」（吸收觸控抖動，避免誤判成平移）。 */
+const TAP_SLOP = 12;
 const LONG_PRESS_MS = 500;
 
 export interface GesturePoint {
@@ -141,7 +143,9 @@ export function attachGestures(target: HTMLElement, handlers: GestureHandlers): 
     }
     if (!start) return;
     if (dragging) handlers.onDragEnd?.(start, p);
-    else if (!moved && !longPressFired) handlers.onTap?.(start);
+    else if (!longPressFired && Math.hypot(p.x - start.x, p.y - start.y) < TAP_SLOP) {
+      handlers.onTap?.(start);
+    }
     dragging = false;
     start = null;
     last = null;

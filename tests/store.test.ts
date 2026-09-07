@@ -123,6 +123,16 @@ describe("store bootstrap", () => {
     expect([...store.selection.value]).toContain("2_2");
   });
 
+  it("editDoc 回傳 null → 不更新、不進歷史", async () => {
+    delete (globalThis as Record<string, unknown>).localStorage;
+    store._setAdapterForTests(new MemoryAdapter());
+    await store.createFromTemplate("blank-grid");
+    const doc0 = store.project.value!.doc;
+    store.editDoc(() => null);
+    expect(store.project.value!.doc).toBe(doc0); // 同一份 doc
+    expect(store.canUndo.value).toBe(false);
+  });
+
   it("selectionOverlapMarks 找出選取重疊的既有區域 / 分類", async () => {
     delete (globalThis as Record<string, unknown>).localStorage;
     store._setAdapterForTests(new MemoryAdapter());

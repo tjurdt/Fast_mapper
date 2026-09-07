@@ -48,7 +48,10 @@ export function buildSvg(
     `viewBox="0 0 ${layout.width} ${layout.totalH}" font-family="'Noto Sans TC',sans-serif">` +
     `<defs>${mask("actualMask", geo.bandActualQuads())}${mask("gridMask", geo.bandFootprintQuads())}</defs>` +
     `<rect width="${layout.width}" height="${layout.totalH}" fill="#fff"/>` +
-    `<g transform="translate(${layout.padX} ${layout.padY})">`;
+    (opts.title
+      ? `<text x="${layout.width / 2}" y="${layout.titleH / 2}" fill="#0e3b43" font-size="44" font-weight="700" text-anchor="middle" dominant-baseline="central">${xesc(opts.title)}</text>`
+      : "") +
+    `<g transform="translate(${layout.padX} ${layout.titleH + layout.padY})">`;
 
   if (opts.mode === "plan" || opts.mode === "overlay") {
     for (const k in doc.cells) {

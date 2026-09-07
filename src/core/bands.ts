@@ -31,6 +31,23 @@ export interface CutGeom {
   jMax: number;
 }
 
+const cutSig = (c: Cut, cw: number, ch: number) =>
+  `${c.id}|${c.ax},${c.ay},${c.bx},${c.by}|${c.side}|${c.depth}|${cw}x${ch}`;
+
+const geomCache = new Map<string, CutGeom>();
+
+/** cutGeom 的記憶化版本（純函式，key 為切線參數 + 格尺寸）。 */
+export function cutGeomCached(cut: Cut, cw: number, ch: number): CutGeom {
+  const k = cutSig(cut, cw, ch);
+  let g = geomCache.get(k);
+  if (!g) {
+    g = cutGeom(cut, cw, ch);
+    if (geomCache.size > 400) geomCache.clear();
+    geomCache.set(k, g);
+  }
+  return g;
+}
+
 export function cutGeom(cut: Cut, cw: number, ch: number): CutGeom {
   const U = (cw + ch) / 2;
   const ax = cut.ax * cw;
@@ -105,6 +122,34 @@ export function bandLocate(g: CutGeom, px: number, py: number): { i: number; j: 
  * 計算被某條帶「完全覆蓋」的一般格集合（這些格在 actual 視圖中被帶取代）。
  * 對應 legacy 的 refreshBands / bandCover。
  */
+/** 單一切線的覆蓋格快取（key = 切線參數 + 格尺寸 + 格網尺寸）。移動一道牆只 miss 一條。 */
+const perCutCover = new Map<string, Set<string>>();
+
+function coverForCut(cut: Cut, cw: number, ch: number, gridW: number, gridH: number): Set<string> {
+  if (!cut.depth) return new Set();
+  const key = `${cutSig(cut, cw, ch)}|${gridW}x${gridH}`;
+  const hit = perCutCover.get(key);
+  if (hit) return hit;
+  const g = cutGeomCached(cut, cw, ch);
+  const pts = bandOuter(g);
+  const xs = pts.map((q) => q[0]);
+  const ys = pts.map((q) => q[1]);
+  const c0 = clamp(Math.floor(Math.min(...xs) / cw), 0, gridW - 1);
+  const c1 = clamp(Math.ceil(Math.max(...xs) / cw), 0, gridW - 1);
+  const r0 = clamp(Math.floor(Math.min(...ys) / ch), 0, gridH - 1);
+  const r1 = clamp(Math.ceil(Math.max(...ys) / ch), 0, gridH - 1);
+  const set = new Set<string>();
+  for (let r = r0; r <= r1; r++) {
+    for (let c = c0; c <= c1; c++) {
+      const overlap = polyArea(clipPolyToRect(pts, c * cw, r * ch, (c + 1) * cw, (r + 1) * ch));
+      if (overlap >= cw * ch * (1 - 1e-7)) set.add(gridKey(r, c));
+    }
+  }
+  if (perCutCover.size > 600) perCutCover.clear();
+  perCutCover.set(key, set);
+  return set;
+}
+
 export function computeBandCover(
   cuts: readonly Cut[],
   cw: number,
@@ -115,20 +160,7 @@ export function computeBandCover(
   const cover = new Set<string>();
   for (const cut of cuts) {
     if (!cut.depth) continue;
-    const g = cutGeom(cut, cw, ch);
-    const pts = bandOuter(g);
-    const xs = pts.map((q) => q[0]);
-    const ys = pts.map((q) => q[1]);
-    const c0 = clamp(Math.floor(Math.min(...xs) / cw), 0, gridW - 1);
-    const c1 = clamp(Math.ceil(Math.max(...xs) / cw), 0, gridW - 1);
-    const r0 = clamp(Math.floor(Math.min(...ys) / ch), 0, gridH - 1);
-    const r1 = clamp(Math.ceil(Math.max(...ys) / ch), 0, gridH - 1);
-    for (let r = r0; r <= r1; r++) {
-      for (let c = c0; c <= c1; c++) {
-        const overlap = polyArea(clipPolyToRect(pts, c * cw, r * ch, (c + 1) * cw, (r + 1) * ch));
-        if (overlap >= cw * ch * (1 - 1e-7)) cover.add(gridKey(r, c));
-      }
-    }
+    for (const k of coverForCut(cut, cw, ch, gridW, gridH)) cover.add(k);
   }
   return cover;
 }

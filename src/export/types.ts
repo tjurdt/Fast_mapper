@@ -13,6 +13,8 @@ export interface ExportOptions {
   omitLabels: boolean;
   /** 圖片下方附 feature 對照清單。 */
   includeList: boolean;
+  /** 在圖片上方加標題（地圖名稱）。空字串 = 不加。 */
+  title: string;
 }
 
 export function normalizeOptions(o: Partial<ExportOptions>): ExportOptions {
@@ -25,6 +27,7 @@ export function normalizeOptions(o: Partial<ExportOptions>): ExportOptions {
     showGrid: o.showGrid !== false,
     omitLabels,
     includeList: mode !== "plan" && !omitLabels && !!o.includeList,
+    title: typeof o.title === "string" ? o.title.trim() : "",
   };
 }
 

@@ -43,6 +43,7 @@ export interface ExportLayout {
   legendItems: (Category | PlanLayer)[];
   width: number;
   mapH: number;
+  titleH: number;
   padX: number;
   padY: number;
   legendH: number;
@@ -68,7 +69,8 @@ export function computeLayout(
   const features = orderedFeatures(doc, geo, numbers);
   const rowsPerCol = Math.max(1, Math.ceil(features.length / EXPORT_COLS));
   const width = imgW + px * 2;
-  const mapH = imgH + py * 2;
+  const titleH = opts.title ? 96 : 0;
+  const mapH = titleH + imgH + py * 2;
 
   const listColumns = Array.from({ length: EXPORT_COLS }, (_, col) =>
     features.slice(col * rowsPerCol, (col + 1) * rowsPerCol).map((feature) => {
@@ -95,6 +97,7 @@ export function computeLayout(
     legendItems,
     width,
     mapH,
+    titleH,
     padX: px,
     padY: py,
     legendH,
@@ -106,7 +109,8 @@ export function computeLayout(
 }
 
 export function exportScaleFor(layout: ExportLayout): number {
-  const byPixels = Math.sqrt(16_000_000 / (layout.width * layout.totalH));
-  const bySide = Math.min(14000 / layout.width, 14000 / layout.totalH);
-  return clamp(Math.min(2, byPixels, bySide), 0.6, 2);
+  // 上限拉低 → 大地圖匯出（光柵化 + PNG 編碼）不會卡太久，畫質仍足夠列印
+  const byPixels = Math.sqrt(9_000_000 / (layout.width * layout.totalH));
+  const bySide = Math.min(12000 / layout.width, 12000 / layout.totalH);
+  return clamp(Math.min(1.6, byPixels, bySide), 0.6, 1.6);
 }

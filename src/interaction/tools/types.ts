@@ -66,6 +66,8 @@ export interface ToolActions {
 export interface TransientActions {
   setDragRect(rect: ImgRect | null): void;
   setGhostCut(seg: ImgRect | null): void;
+  /** 拖曳切線端點時的即時預覽（格為單位 [ax,ay,bx,by]）。 */
+  setCutDragPreview(seg: ImgRect | null): void;
 }
 
 export interface Tool {

@@ -13,6 +13,10 @@ export interface Scene {
   highlightFeature: string | null;
   /** 目前是否在切線模式（畫出虛線幽靈切線）。 */
   cutMode: boolean;
+  /** 拖曳框選中的矩形（影像單位座標 [x0,y0,x1,y1]）。 */
+  dragRect: readonly [number, number, number, number] | null;
+  /** 正在拉的幽靈切線（格為單位 [ax,ay,bx,by]）。 */
+  ghostCut: readonly [number, number, number, number] | null;
 }
 
 export interface SceneDims {

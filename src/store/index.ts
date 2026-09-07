@@ -18,7 +18,25 @@ import {
   type StorageAdapter,
 } from "../persistence";
 import { readLegacyProject } from "../model/legacy";
+import {
+  addWall,
+  assignCells,
+  cycleCutSide,
+  deleteCut,
+  deleteFeature,
+  eraseCells,
+  moveSelection,
+  renameFeature,
+  setFeatureCategory,
+  stepCutDepth,
+  toggleCutWall,
+  type AssignArgs,
+  type MoveDir,
+  type MoveResult,
+} from "../model/edits";
 import type { Scene } from "../render/scene";
+
+export { uiEvents } from "./events";
 
 // ---- signals ----
 
@@ -28,7 +46,16 @@ export const ready = signal(false);
 
 export const selection = signal<ReadonlySet<CellKey>>(new Set());
 export const inspectedFeature = signal<string | null>(null);
-export const activeToolId = signal<string>("assign");
+export const activeToolId = signal<string>("select");
+
+export function setTool(id: string): void {
+  activeToolId.value = id;
+}
+
+/** 只影響渲染、不進歷史的暫時狀態（拖曳框、幽靈切線、正在編輯的切線）。 */
+export const dragRect = signal<readonly [number, number, number, number] | null>(null);
+export const ghostCut = signal<readonly [number, number, number, number] | null>(null);
+export const editingCutId = signal<string | null>(null);
 
 export const ui = {
   legendOpen: signal(false),
@@ -62,6 +89,8 @@ export const scene = computed<Scene | null>(() => {
     selection: selection.value,
     highlightFeature: inspectedFeature.value,
     cutMode: activeToolId.value === "cut",
+    dragRect: dragRect.value,
+    ghostCut: ghostCut.value,
   };
 });
 
@@ -162,6 +191,97 @@ export function renameProject(name: string): void {
 
 export function setSelection(keys: Iterable<CellKey>): void {
   selection.value = new Set(keys);
+}
+
+export function clearSelection(): void {
+  if (selection.value.size) selection.value = new Set();
+}
+
+export function toggleCell(k: CellKey): void {
+  const next = new Set(selection.value);
+  if (next.has(k)) next.delete(k);
+  else next.add(k);
+  selection.value = next;
+}
+
+/** 依影像矩形框選（一般格 + actual 視圖的 band 格）。add=false 時取代選取。 */
+export function selectRect(rect: readonly [number, number, number, number], add = false): void {
+  const geo = geometry.value;
+  const p = project.value;
+  if (!geo || !p) return;
+  const keys = geo.cellsInRect(rect[0], rect[1], rect[2], rect[3], p.view.view === "actual");
+  const next = add ? new Set(selection.value) : new Set<CellKey>();
+  for (const k of keys) next.add(k);
+  selection.value = next;
+}
+
+export function assignSelection(args: AssignArgs): void {
+  if (!selection.value.size) return;
+  const keys = [...selection.value];
+  editDoc((doc) => assignCells(doc, keys, args));
+  clearSelection();
+}
+
+export function eraseSelection(): void {
+  if (!selection.value.size) return;
+  const keys = [...selection.value];
+  editDoc((doc) => eraseCells(doc, keys));
+  clearSelection();
+}
+
+export function moveSelectionBy(dir: MoveDir): { ok: boolean; reason?: string } {
+  const p = project.value;
+  if (!p || !selection.value.size) return { ok: false, reason: "沒有選取" };
+  const keys = [...selection.value];
+  let result: MoveResult = { ok: false };
+  editDoc((doc) => {
+    result = moveSelection(doc, keys, dir);
+    return result.ok ? doc : undefined;
+  });
+  if (result.ok && result.keys) selection.value = new Set(result.keys);
+  return { ok: result.ok, ...(result.reason ? { reason: result.reason } : {}) };
+}
+
+export function inspectFeature(id: string | null): void {
+  inspectedFeature.value = id;
+}
+
+export function addWallSegment(seg: { ax: number; ay: number; bx: number; by: number }): string {
+  let id = "";
+  editDoc((doc) => {
+    const r = addWall(doc, seg);
+    id = r.cutId;
+    return r.doc;
+  });
+  return id;
+}
+
+export function beginEditCut(cutId: string | null): void {
+  editingCutId.value = cutId;
+  if (cutId) clearSelection();
+}
+
+export function updateCut(cutId: string, op: "depth+" | "depth-" | "side" | "wall" | "delete"): void {
+  editDoc((doc) => {
+    if (op === "depth+") return stepCutDepth(doc, cutId, 1);
+    if (op === "depth-") return stepCutDepth(doc, cutId, -1);
+    if (op === "side") return cycleCutSide(doc, cutId);
+    if (op === "wall") return toggleCutWall(doc, cutId);
+    return deleteCut(doc, cutId);
+  });
+  if (op === "delete") editingCutId.value = null;
+}
+
+// feature CRUD
+export function renameFeatureAction(id: string, name: string): void {
+  editDoc((doc) => renameFeature(doc, id, name));
+}
+export function setFeatureCategoryAction(id: string, categoryId: string): void {
+  editDoc((doc) => setFeatureCategory(doc, id, categoryId));
+}
+export function deleteFeatureAction(id: string): void {
+  editDoc((doc) => deleteFeature(doc, id));
+  if (inspectedFeature.value === id) inspectedFeature.value = null;
 }
 
 export async function refreshProjectList(): Promise<void> {

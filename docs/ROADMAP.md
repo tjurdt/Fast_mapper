@@ -53,9 +53,26 @@
 - 瀏覽器實測：東港華僑市場底圖正確繪出，平移 / 縮放 / 重新光柵化正常，無 console error
 - `tests/` —— 共 58 個測試（+7：viewport、scheduler）
 
-## Phase 4 — interaction/ + tools/ ⬜
+## Phase 4 — interaction/ + tools/ ✅
 
-- 手勢層；Tool registry；assign / cut / move / inspect / cell-detail 各一檔
+- `src/interaction/gestures.ts` —— pointer → tap / long-press / drag / pinch / wheel（移植 legacy stagewrap 邏輯）
+- `src/interaction/tools/` —— `Tool` 介面 + registry；`select`（框選 / 點格 / 長按單格）、
+  `cut`（拖曳畫牆、點選既有切線）、`inspect`（點格看命名區域、拖曳平移）
+- `src/interaction/controller.ts` —— 手勢 ↔ 作用中工具 ↔ renderer 的交會點；
+  pinch / wheel → viewport
+- `src/model/edits.ts` —— 純編輯操作：`assignCells` / `eraseCells` / `moveSelection` /
+  `toggleFeatureCell` / `ensureFeatureRegions`（移植 ensureNamedRegions 洪水填充）/
+  cut 深度·側·牆·刪除 / feature CRUD / `setCellShape`
+- `src/store` —— 選取與編輯 actions（selectRect / assignSelection / eraseSelection /
+  moveSelectionBy / addWallSegment / updateCut / feature CRUD）、暫時渲染狀態
+  （dragRect / ghostCut）、`uiEvents` 匯流排
+- `src/render/layers.ts` —— 畫拖曳框與幽靈切線
+- `src/main.ts` —— 過渡用純 DOM 工具列（Phase 5 用 Preact 重建）
+- 瀏覽器實測：框選 256 格 → 指定分類建立店家 → undo/redo → 切換工具畫牆，無 error
+- `tests/` —— 共 68 個測試（+10：edits）
+
+**Phase 4 尚未移植（之後補）**：封閉區洪水框選（legacy `selectEnclosedAt`）、
+斜切格外形編輯、切線端點拖曳把手、「目標區域筆刷」模式（`toggleFeatureCell` 已有純函式、未接工具）。
 
 ## Phase 5 — ui/ + i18n + 專案/範本切換 ⬜
 

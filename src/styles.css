@@ -24,6 +24,9 @@
   box-sizing: border-box;
   -webkit-tap-highlight-color: transparent;
 }
+[hidden] {
+  display: none !important;
+}
 html,
 body {
   margin: 0;
@@ -67,6 +70,53 @@ body {
 .topbar .meta {
   color: var(--muted);
   font-size: 0.82rem;
+}
+
+.topbar .grow,
+.toolbar .grow {
+  flex: 1 1 auto;
+}
+.topbar button,
+.toolbar button {
+  font: inherit;
+  border: 1px solid var(--line);
+  background: var(--panel);
+  color: var(--text);
+  border-radius: 7px;
+  padding: 0.3rem 0.6rem;
+  cursor: pointer;
+}
+.topbar button:disabled {
+  opacity: 0.4;
+}
+.toolbar {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.4rem 0.9rem;
+  background: var(--panel);
+  border-bottom: 1px solid var(--line);
+  flex-wrap: wrap;
+}
+.toolbar button.on {
+  background: var(--ink);
+  color: #fff;
+  border-color: var(--ink);
+}
+.movepad {
+  display: inline-grid;
+  grid-template-columns: repeat(3, 1.7rem);
+  gap: 2px;
+}
+.movepad button {
+  padding: 0.2rem 0;
+}
+.movepad [data-move="up"] {
+  grid-column: 2;
+}
+.movepad [data-move="down"] {
+  grid-column: 2;
 }
 
 .stagewrap {

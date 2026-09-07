@@ -114,6 +114,41 @@ export function drawOverlayLayer(ctx: CanvasRenderingContext2D, scene: Scene, di
   drawCutLines(ctx, scene, dims);
   drawSelection(ctx, scene);
   drawHighlight(ctx, scene, dims);
+  drawDragRect(ctx, scene, dims);
+  drawGhostCut(ctx, scene, dims);
+}
+
+function drawDragRect(ctx: CanvasRenderingContext2D, scene: Scene, dims: SceneDims): void {
+  const r = scene.dragRect;
+  if (!r) return;
+  ctx.strokeStyle = "#b5401f";
+  ctx.lineWidth = dims.cw * 0.14;
+  ctx.strokeRect(r[0], r[1], r[2] - r[0], r[3] - r[1]);
+  ctx.fillStyle = hexA("#e2603f", 0.2);
+  ctx.fillRect(r[0], r[1], r[2] - r[0], r[3] - r[1]);
+}
+
+function drawGhostCut(ctx: CanvasRenderingContext2D, scene: Scene, dims: SceneDims): void {
+  const g = scene.ghostCut;
+  if (!g) return;
+  ctx.save();
+  ctx.lineCap = "round";
+  ctx.lineWidth = Math.max(1.4, dims.cw * 0.3);
+  ctx.strokeStyle = "rgba(214,79,39,.95)";
+  ctx.beginPath();
+  ctx.moveTo(g[0] * dims.cw, g[1] * dims.ch);
+  ctx.lineTo(g[2] * dims.cw, g[3] * dims.ch);
+  ctx.stroke();
+  ctx.fillStyle = "#d64f27";
+  for (const [gx, gy] of [
+    [g[0], g[1]],
+    [g[2], g[3]],
+  ] as const) {
+    ctx.beginPath();
+    ctx.arc(gx * dims.cw, gy * dims.ch, Math.max(1.6, dims.cw * 0.38), 0, 7);
+    ctx.fill();
+  }
+  ctx.restore();
 }
 
 function drawBandGrid(ctx: CanvasRenderingContext2D, scene: Scene, dims: SceneDims): void {

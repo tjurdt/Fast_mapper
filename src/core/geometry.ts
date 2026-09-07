@@ -309,6 +309,51 @@ export class MapGeometry {
     return out;
   }
 
+  /** 與影像矩形相交的格鍵（一般格用左上角落點，band 格用中心點；沿用 legacy selectInRect）。 */
+  cellsInRect(x0: number, y0: number, x1: number, y1: number, includeBands: boolean): CellKey[] {
+    const out: CellKey[] = [];
+    const c0 = clamp(Math.floor(x0 / this.cw), 0, this.gridW - 1);
+    const c1 = clamp(Math.floor(x1 / this.cw), 0, this.gridW - 1);
+    const r0 = clamp(Math.floor(y0 / this.ch), 0, this.gridH - 1);
+    const r1 = clamp(Math.floor(y1 / this.ch), 0, this.gridH - 1);
+    for (let r = r0; r <= r1; r++) {
+      for (let c = c0; c <= c1; c++) {
+        const k = gridKey(r, c);
+        if (!this.cellCovered(k)) out.push(k);
+      }
+    }
+    if (includeBands) {
+      for (const cut of this.doc.cuts) {
+        if (!cut.depth) continue;
+        const g = this.geomFor(cut);
+        for (let i = 0; i < g.k; i++) {
+          for (let j = g.jMin; j <= g.jMax; j++) {
+            const q = bandQuad(g, i, j);
+            const cx = (q[0]![0] + q[2]![0]) / 2;
+            const cy = (q[0]![1] + q[2]![1]) / 2;
+            if (cx >= x0 && cx <= x1 && cy >= y0 && cy <= y1) out.push(bandKey(cut.id, i, j));
+          }
+        }
+      }
+    }
+    return out;
+  }
+
+  /** 靠近某條切線的 cut id（tol 為影像單位容差）；沒有則 null。 */
+  cutNear(x: number, y: number, tol: number): string | null {
+    let best: { id: string; d: number } | null = null;
+    for (const cut of this.doc.cuts) {
+      const g = this.geomFor(cut);
+      const dx = g.bx - g.ax;
+      const dy = g.by - g.ay;
+      const l2 = dx * dx + dy * dy || 1;
+      const t = clamp(((x - g.ax) * dx + (y - g.ay) * dy) / l2, 0, 1);
+      const d = Math.hypot(x - (g.ax + dx * t), y - (g.ay + dy * t));
+      if (d <= tol && (!best || d < best.d)) best = { id: cut.id, d };
+    }
+    return best ? best.id : null;
+  }
+
   /** 影像空間座標 → 格鍵。actual 視圖優先落在 band 格。 */
   cellAtPoint(x: number, y: number, view: "actual" | "plan"): CellKey {
     if (view === "actual") {

@@ -61,10 +61,14 @@ core/        純網域邏輯：幾何、band、編號、taxonomy。零 DOM、零
 ### 新增一個工具（例如「橡皮擦」「量距」）
 
 1. 在 `src/interaction/tools/` 新增 `<name>.ts`，實作 `Tool` 介面
-   （`src/interaction/tools/types.ts`）。
-2. 在 `src/interaction/tools/registry.ts` 註冊。
-3. 工具只能透過 `commands` 改文件、透過 `store` 讀 UI 狀態；不要直接改 `MapDoc`。
-4. 需要新的幾何運算 → 加到 `core/` 並補測試，不要寫在工具裡。
+   （`src/interaction/tools/types.ts`）：實作需要的手勢回呼
+   （`onTap` / `onDrag` / `onDragEnd` / `onLongPress` …）。
+2. 在 `src/interaction/tools/registry.ts` 的 `TOOLS` 陣列註冊。
+3. 工具透過 `ctx.actions`（store 實作的 `ToolActions`）改狀態、`ctx.transient`
+   設暫時渲染狀態（拖曳框之類）；**不直接改 `MapDoc`、不直接 import store**。
+4. 若需要新的編輯操作 → 加到 `src/model/edits.ts`（純函式 `(doc, args) => MapDoc`）
+   並在 store 包一個 action 呼叫 `editDoc()`。
+5. 需要新的幾何運算 → 加到 `core/` 並補測試，不要寫在工具裡。
 
 ### 新增一種匯出格式
 

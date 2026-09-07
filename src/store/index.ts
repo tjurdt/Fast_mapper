@@ -35,6 +35,7 @@ import {
   deletePlanLayer,
   eraseCells,
   moveCutEndpoint,
+  type BandStashEntry,
   moveObjects,
   moveSelection,
   pasteObjects,
@@ -167,6 +168,8 @@ export const scene = computed<Scene | null>(() => {
 let adapter: StorageAdapter = createStorageAdapter();
 const history = new DocHistory();
 let persistTimer: ReturnType<typeof setTimeout> | null = null;
+/** 「編輯這條線」期間被端點縮短犧牲的斜格暫存；切到別條線 / undo / 換專案時清空。 */
+let cutStash: { cutId: string; cells: BandStashEntry[] } | null = null;
 
 export function _setAdapterForTests(a: StorageAdapter): void {
   adapter = a;
@@ -193,6 +196,7 @@ export async function persistNow(): Promise<void> {
 }
 
 function setProject(p: Project, { resetHistory = true } = {}): void {
+  cutStash = null;
   batch(() => {
     project.value = p;
     selection.value = new Set();
@@ -238,6 +242,7 @@ export function redo(): void {
 function applyHistoryDoc(doc: MapDoc): void {
   const p = project.value;
   if (!p) return;
+  cutStash = null;
   batch(() => {
     project.value = { ...p, doc, updatedAt: Date.now() };
     selection.value = new Set();
@@ -334,8 +339,8 @@ export function selectionOverlapMarks(): OverlapMark[] {
   if (!geo || !p) return [];
   const src = new Set<CellKey>();
   for (const k of selection.value) {
+    src.add(k); // band 格自己也有 cat / feature，要一併計入
     if (k.charCodeAt(0) === 66) for (const nk of geo.gridKeysUnderQuad(geo.keyQuad(k))) src.add(nk);
-    else src.add(k);
   }
   const catColor = new Map(p.doc.categories.map((c) => [c.id, c.color]));
   const featById = new Map(p.doc.features.map((f) => [f.id, f]));
@@ -475,64 +480,68 @@ export function toggleCutSelected(id: string): void {
 }
 
 /**
- * 把種子牆 / 種子命名區域展開成完整「group」：
- *  - 牆 → 其斜格上的所有店家 → 那些店家的所有格
- *  - 店家 → 若跨到斜格，連同該斜格所屬的牆
- * 直到收斂。回傳 { cells（一般格）, cuts }。
+ * 從種子（一組格 + 一組牆）展開成「group」，**以連通分量為單位**：
+ *  - 種子格 → 它所在的那一塊連通分量（同店家但分開的另一塊不會被拉進來）。
+ *  - 分量若含斜格 → 連同該斜格所屬的牆。
+ *  - 牆 → 其上所有斜格 → 那些斜格各自所在的分量。
+ * 直到收斂。回傳 { cells（一般格）, cuts }。band 格不放進 cells（由牆代表）。
  */
 function expandObjectGroup(
   seedCuts: Iterable<string>,
-  seedFeatures: Iterable<string>,
+  seedCells: Iterable<CellKey>,
 ): { cells: Set<CellKey>; cuts: Set<string> } {
   const geo = geometry.value;
   const cuts = new Set(seedCuts);
-  const feats = new Set(seedFeatures);
-  const cells = new Set<CellKey>();
-  if (!geo) return { cells, cuts };
+  const comp = new Set<CellKey>(); // 分量內所有格（含 band）
+  if (!geo) return { cells: new Set(), cuts };
+
+  for (const sk of seedCells) for (const ck of geo.componentContaining(sk)) comp.add(ck);
 
   let changed = true;
   while (changed) {
     changed = false;
-    for (const cid of [...cuts]) {
-      for (const f of geo.featuresOnCut(cid)) {
-        if (!feats.has(f)) {
-          feats.add(f);
+    for (const ck of comp) {
+      if (ck.charCodeAt(0) === 66) {
+        const cid = ck.slice(1, ck.indexOf("_", 1));
+        if (!cuts.has(cid)) {
+          cuts.add(cid);
           changed = true;
         }
       }
     }
-    for (const fid of [...feats]) {
-      for (const k of geo.featureKeys(fid)) {
-        if (k.charCodeAt(0) === 66) {
-          const cid = k.slice(1, k.indexOf("_", 1));
-          if (!cuts.has(cid)) {
-            cuts.add(cid);
+    for (const cid of cuts) {
+      for (const bk of geo.cutBandKeys(cid)) {
+        if (comp.has(bk) || !geo.cell(bk)?.feature) continue;
+        for (const ck of geo.componentContaining(bk)) {
+          if (!comp.has(ck)) {
+            comp.add(ck);
             changed = true;
           }
         }
       }
     }
   }
-  for (const fid of feats) {
-    for (const k of geo.featureKeys(fid)) if (k.charCodeAt(0) !== 66) cells.add(k);
-  }
+
+  const cells = new Set<CellKey>();
+  for (const ck of comp) if (ck.charCodeAt(0) !== 66) cells.add(ck);
   return { cells, cuts };
 }
 
-/** 點選一個物件（牆或店家）→ 選取整個 group。toggle=true 時再點取消整組。 */
+/** 點選一個物件（牆或某格）→ 選取整個 group。toggle=true 時再點同一物件會取消整組。 */
 export function pickObjectGroup(
-  seed: { cutId?: string; featureId?: string },
+  seed: { cutId?: string; cellKey?: CellKey },
   additive: boolean,
   toggle: boolean,
 ): void {
   const { cells, cuts } = expandObjectGroup(
     seed.cutId ? [seed.cutId] : [],
-    seed.featureId ? [seed.featureId] : [],
+    seed.cellKey ? [seed.cellKey] : [],
   );
   const curCells = new Set(selection.value);
   const curCuts = new Set(selectedCutIds.value);
   const alreadyIn =
-    (seed.cutId && curCuts.has(seed.cutId)) || (seed.featureId && [...cells].some((k) => curCells.has(k)));
+    (seed.cutId != null && curCuts.has(seed.cutId)) ||
+    (seed.cellKey != null && [...cells].some((k) => curCells.has(k)));
 
   batch(() => {
     if (toggle && alreadyIn) {
@@ -551,20 +560,33 @@ export function pickObjectGroup(
   });
 }
 
-/** 選取整個命名區域 group（供舊呼叫端 / 清單使用）。 */
+/** 選取整個命名區域（所有分量）—— 供清單 / 程式呼叫。 */
 export function selectWholeFeature(id: string, additive: boolean): void {
-  pickObjectGroup({ featureId: id }, additive, false);
+  const geo = geometry.value;
+  if (!geo) return;
+  const { cells, cuts } = expandObjectGroup([], geo.featureKeys(id));
+  batch(() => {
+    const nc = additive ? new Set(selection.value) : new Set<CellKey>();
+    const nu = additive ? new Set(selectedCutIds.value) : new Set<string>();
+    for (const k of cells) nc.add(k);
+    for (const c of cuts) nu.add(c);
+    selection.value = nc;
+    selectedCutIds.value = nu;
+  });
 }
 
 /**
- * 以「物件」為單位框選：矩形只要碰到店家的任一格或牆的線段，整個物件（連同 group）就被選。
+ * 以「物件」為單位框選：矩形碰到任一格 / 牆線段 → 那些格所在的分量、那些牆整條，被選。
  */
 export function objSelectRect(rect: readonly [number, number, number, number], additive: boolean): void {
   const geo = geometry.value;
-  if (!geo) return;
-  const feats = geo.featuresInRect(rect[0], rect[1], rect[2], rect[3]);
+  const p = project.value;
+  if (!geo || !p) return;
+  const seedCells = geo
+    .cellsInRect(rect[0], rect[1], rect[2], rect[3], p.view.view === "actual")
+    .filter((k) => geo.cell(k)?.feature);
   const seedCuts = geo.cutsInRect(rect[0], rect[1], rect[2], rect[3]);
-  const { cells, cuts } = expandObjectGroup(seedCuts, feats);
+  const { cells, cuts } = expandObjectGroup(seedCuts, seedCells);
   batch(() => {
     const nextCells = additive ? new Set(selection.value) : new Set<CellKey>();
     const nextCuts = additive ? new Set(selectedCutIds.value) : new Set<string>();
@@ -690,7 +712,8 @@ export function paintRect(rect: readonly [number, number, number, number], erase
 // ---- 切線端點拖曳 ----
 
 export function moveCutEndpointTo(cutId: string, end: "a" | "b", x: number, y: number): void {
-  editDoc((doc) => moveCutEndpoint(doc, cutId, end, x, y));
+  if (cutStash?.cutId !== cutId) cutStash = { cutId, cells: [] };
+  editDoc((doc) => moveCutEndpoint(doc, cutId, end, x, y, cutStash!.cells));
 }
 
 export function addWallSegment(seg: { ax: number; ay: number; bx: number; by: number }): string {
@@ -706,14 +729,17 @@ export function addWallSegment(seg: { ax: number; ay: number; bx: number; by: nu
 export function beginEditCut(cutId: string | null): void {
   editingCutId.value = cutId;
   if (cutDragPreview.value) cutDragPreview.value = null;
+  if (cutStash && cutStash.cutId !== cutId) cutStash = null; // 換一條線 / 結束 → 犧牲定案
   if (cutId) clearSelection();
 }
 
 export function setCutDepthAction(cutId: string, depth: number): void {
+  cutStash = null;
   editDoc((doc) => setCutDepth(doc, cutId, depth));
 }
 
 export function updateCut(cutId: string, op: "depth+" | "depth-" | "side" | "wall" | "delete"): void {
+  cutStash = null;
   editDoc((doc) => {
     if (op === "depth+") return stepCutDepth(doc, cutId, 1);
     if (op === "depth-") return stepCutDepth(doc, cutId, -1);

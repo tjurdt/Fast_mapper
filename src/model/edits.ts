@@ -35,33 +35,6 @@ export function nextUnnamedName(doc: MapDoc, categoryId: string): string {
   return base + n;
 }
 
-/**
- * 複製 / 貼上內容時，把來源 feature id 換成全新的 id（並在 doc 內建立對應的新 feature），
- * 讓貼上後的物件與「雙胞胎」完全獨立、不會被連動選取。
- */
-function makeFeatureRemapper(doc: MapDoc): (srcId: string | undefined) => string | undefined {
-  const map = new Map<string, string>();
-  return (srcId) => {
-    if (!srcId) return undefined;
-    let nid = map.get(srcId);
-    if (nid) return nid;
-    nid = rid("f");
-    map.set(srcId, nid);
-    const src = doc.features.find((f) => f.id === srcId);
-    const base = src ? src.name : "未命名";
-    let name = base + "（複本）";
-    let n = 2;
-    while (doc.features.some((f) => f.name === name)) name = `${base}（複本 ${n++}）`;
-    doc.features.push({
-      id: nid,
-      name,
-      category: src?.category ?? doc.categories[0]?.id ?? "",
-      ...(src?.facility ? { facility: src.facility } : {}),
-    });
-    return nid;
-  };
-}
-
 /** 移除「未命名*且沒有任何格子使用」的 feature（legacy pruneUnusedUnnamedShops）。 */
 export function pruneUnnamedFeatures(doc: MapDoc): MapDoc {
   const used = new Set<string>();
@@ -360,7 +333,6 @@ export function copyObjects(
       return { ok: false, reason: "已到達網格邊界", cutIds: [], cellKeys: [] };
   }
 
-  const remap = makeFeatureRemapper(doc);
   const newCutIds: string[] = [];
   for (const c of cuts) {
     const nid = rid("k");
@@ -369,8 +341,7 @@ export function copyObjects(
     for (const k in doc.cells) {
       if (!isBandKey(k) || bandCutId(k) !== c.id) continue;
       const rest = k.slice(("B" + c.id).length); // "_i_j"
-      const s = doc.cells[k]!;
-      doc.cells["B" + nid + rest] = { ...s, ...(s.feature ? { feature: remap(s.feature) } : {}) };
+      doc.cells["B" + nid + rest] = { ...doc.cells[k]! };
     }
   }
 
@@ -382,7 +353,7 @@ export function copyObjects(
     if (!src || (!src.cat && !src.feature)) continue;
     const t: Cell = { ...(doc.cells[nk] ?? {}) };
     if (src.cat) t.cat = src.cat;
-    if (src.feature) t.feature = remap(src.feature);
+    if (src.feature) t.feature = src.feature;
     if (src.poly) t.poly = src.poly;
     else delete t.poly;
     doc.cells[nk] = t;
@@ -390,7 +361,6 @@ export function copyObjects(
   }
 
   pruneBandCells(doc);
-  pruneOrphanFeatures(doc);
   return { ok: true, cutIds: newCutIds, cellKeys: newCellKeys };
 }
 
@@ -470,7 +440,6 @@ export function pasteObjects(
   col: number,
 ): { cutIds: string[]; cellKeys: CellKey[] } {
   const geo = new MapGeometry(doc);
-  const remap = makeFeatureRemapper(doc);
 
   // 內容包圍盒 → 把貼上位置夾在網格內，讓靠邊點也貼得下（至少貼一部分）
   let maxDr = 0;
@@ -498,12 +467,7 @@ export function pasteObjects(
       by: cc.cut.by + row,
     });
     cutIds.push(nid);
-    for (const b of cc.bands) {
-      doc.cells[`B${nid}_${b.i}_${b.j}`] = {
-        ...b.cell,
-        ...(b.cell.feature ? { feature: remap(b.cell.feature) } : {}),
-      };
-    }
+    for (const b of cc.bands) doc.cells[`B${nid}_${b.i}_${b.j}`] = { ...b.cell };
   }
   const cellKeys: CellKey[] = [];
   for (const c of clip.cells) {
@@ -513,14 +477,13 @@ export function pasteObjects(
     const k = `${r}_${cc}`;
     const t: Cell = { ...(doc.cells[k] ?? {}) };
     if (c.cat) t.cat = c.cat;
-    if (c.feature) t.feature = remap(c.feature);
+    if (c.feature) t.feature = c.feature;
     if (c.poly) t.poly = c.poly;
     else delete t.poly;
     doc.cells[k] = t;
     cellKeys.push(k);
   }
   pruneBandCells(doc);
-  pruneOrphanFeatures(doc);
   return { cutIds, cellKeys };
 }
 
@@ -698,16 +661,34 @@ export function deleteCut(doc: MapDoc, id: string): MapDoc {
   return doc;
 }
 
+/** 端點編輯期間暫存被犧牲的斜格（`i` 為當前索引框架下的段索引）。 */
+export interface BandStashEntry {
+  i: number;
+  j: number;
+  cell: Cell;
+}
+
 /**
  * 移動切線端點，並依規則搬移斜格內容：
  *  - 斜格以「沿切線的第 i 段」索引（i 從 a 端起算）。
- *  - 移動 b 端：i 不變（内容固定在 a 端），變短時只有 i ≥ 新段數的（靠 b 端）被犧牲。
+ *  - 移動 b 端：i 不變（內容固定在 a 端），變短時只有 i ≥ 新段數的（靠 b 端）被犧牲。
  *  - 移動 a 端：把 i 全部平移 (新段數 − 舊段數)，讓內容固定在 b 端；變短時靠 a 端的被犧牲。
  *  - 長度不變（段數不變）→ i 完全不變、內容原封不動。
- *  - 拉一圈又拉回原位（commit 只在放手時）→ 段數回到原值 → 完全不變。
+ *  - 拉一圈又拉回原位 → 段數回到原值 → 完全不變。
  *  - 拉長 → 多出的段沒有內容。
+ *
+ * `stash`（可選、會被就地改寫）：同一次「編輯這條線」的期間，被犧牲的斜格暫存在這裡；
+ * 只要線又拉回去（在切換到別條線之前），這些內容會自動回來。呼叫端（store）在
+ * `beginEditCut` 切到別條線時把 stash 清空 = 犧牲定案。
  */
-export function moveCutEndpoint(doc: MapDoc, id: string, end: "a" | "b", x: number, y: number): MapDoc {
+export function moveCutEndpoint(
+  doc: MapDoc,
+  id: string,
+  end: "a" | "b",
+  x: number,
+  y: number,
+  stash?: BandStashEntry[],
+): MapDoc {
   const cut = cutById(doc, id);
   if (!cut) return doc;
 
@@ -715,11 +696,10 @@ export function moveCutEndpoint(doc: MapDoc, id: string, end: "a" | "b", x: numb
   const ch = doc.grid.cellPx;
   const prefix = "B" + id + "_";
 
-  let carried: { i: number; j: number; cell: Cell }[] | null = null;
+  const carried: BandStashEntry[] = stash ? [...stash] : [];
   let oldK = 0;
   if (cut.depth) {
     oldK = cutGeom(cut, cw, ch).k;
-    carried = [];
     for (const k in doc.cells) {
       if (!k.startsWith(prefix)) continue;
       const b = parseBandKey(k);
@@ -736,16 +716,28 @@ export function moveCutEndpoint(doc: MapDoc, id: string, end: "a" | "b", x: numb
     cut.by = y;
   }
 
-  if (carried && carried.length) {
+  const nextStash: BandStashEntry[] = [];
+  if (cut.depth && carried.length) {
     const gNew = cutGeom(cut, cw, ch);
     const shift = end === "a" ? gNew.k - oldK : 0;
     for (const item of carried) {
       const ni = item.i + shift;
-      if (ni < 0 || ni >= gNew.k) continue; // 被犧牲的段
-      if (item.j < gNew.jMin || item.j > gNew.jMax) continue;
+      const inRange = ni >= 0 && ni < gNew.k && item.j >= gNew.jMin && item.j <= gNew.jMax;
       const nk = bandKey(id, ni, item.j);
-      doc.cells[nk] = { ...(doc.cells[nk] ?? {}), ...item.cell };
+      if (inRange && !doc.cells[nk]) {
+        doc.cells[nk] = { ...item.cell };
+      } else if (inRange) {
+        // 位置被別的（未 stash 的）內容佔了 → 合併但不覆蓋
+        doc.cells[nk] = { ...item.cell, ...doc.cells[nk] };
+      } else {
+        nextStash.push({ i: ni, j: item.j, cell: item.cell });
+      }
     }
+  }
+
+  if (stash) {
+    stash.length = 0;
+    stash.push(...nextStash);
   }
 
   pruneBandCells(doc);

@@ -287,6 +287,25 @@
   完全不變；拉一圈回原位（commit 只在放手）→ 完全不變**；拉長 → 多出的段沒內容
 - `tests/` —— 100 個測試（+2）
 
+## Phase 17 — 連通分量選取 + 端點犧牲可回復 + 斜格沿用重疊 + 新 ICON ✅
+
+- **選取以「連通分量」為單位**（取代 Phase 16 的「複製給新 feature id」）：
+  `MapGeometry.componentContaining(k)` 回傳含該格的那一塊；`expandObjectGroup` 從
+  格鍵（而非 feature id）種子出發 —— 點某店家分開的其中一塊，只選到那一塊，
+  分開的雙胞胎不連動。`pickObjectGroup({ cutId?, cellKey? }, …)`；`objselect` 工具
+  傳入被點到的格鍵（斜格經 `geo.bandCellAt`）。`copyObjects` / `pasteObjects`
+  **還原成共用同一個 feature id**（移除 `makeFeatureRemapper` 與 `pruneOrphanFeatures`）
+- **端點縮短犧牲的斜格可回復**：`moveCutEndpoint` 加選用 `stash` 參數，store 用
+  `cutStash`（{ cutId, cells }）記住「編輯這條線」期間被犧牲的內容 —— 只要在切到
+  別條線之前把線拉回去，內容自動復原；`beginEditCut` 換線、`setCutDepth` / `updateCut`
+  / undo / 換專案時清空 = 犧牲定案
+- **斜格也能「沿用重疊區域」**：`selectionOverlapMarks` 現在把斜格自己的
+  `cat` / `feature` 一併計入（先前只展開到底下的一般格）
+- **全新網站 ICON**（`public/favicon.svg` + `favicon-maskable.svg`）：暖色摺疊地圖
+  ＋定位針，`theme-color` / manifest 改暖色（`#3d322a` / `#f3ece0`），
+  重新輸出 `icon-192/512`、`apple-touch-icon`、`icon-maskable`、`favicon-32`
+- `tests/` —— 105 個測試（+5）
+
 ## 驗證清單
 
 - [ ] 舊 `grid-market-v4` localStorage 內容 → 自動匯入為「東港華僑市場」專案，

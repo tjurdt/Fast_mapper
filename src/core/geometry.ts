@@ -269,6 +269,24 @@ export class MapGeometry {
     return out;
   }
 
+  /** 含指定格鍵的連通分量（同一 feature 內相連的一塊）。沒 feature → 只回它自己。 */
+  componentContaining(k: CellKey): CellKey[] {
+    const f = this.doc.cells[k]?.feature;
+    if (!f) return [k];
+    for (const comp of this.featureComponents(f)) {
+      if (comp.includes(k)) return comp;
+    }
+    return [k];
+  }
+
+  /** 某條切線的所有斜格鍵（`B<cutId>_i_j`）。 */
+  cutBandKeys(cutId: string): CellKey[] {
+    const prefix = "B" + cutId + "_";
+    const out: CellKey[] = [];
+    for (const k in this.doc.cells) if (k.startsWith(prefix)) out.push(k);
+    return out;
+  }
+
   /** 一個分量內最接近質心的格中心（標籤錨點）。 */
   componentAnchor(keys: CellKey[]): Point | null {
     const pts = keys.map((k) => this.keyCenter(k)).filter((p): p is Point => !!p);

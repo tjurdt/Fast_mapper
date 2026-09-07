@@ -112,6 +112,38 @@ describe("MapGeometry — 連通分量", () => {
     expect(comps.length).toBe(2);
     expect(geo.featureLabelAnchors("A").length).toBe(2);
   });
+
+  it("componentContaining 只回含該格的那一塊", () => {
+    const geo = new MapGeometry(
+      makeDoc({
+        grid: { w: 6, h: 4, cellPx: 14 },
+        cells: {
+          "0_0": { feature: "A" },
+          "0_1": { feature: "A" },
+          "3_4": { feature: "A" },
+        },
+      }),
+    );
+    expect(geo.componentContaining("0_0").sort()).toEqual(["0_0", "0_1"]);
+    expect(geo.componentContaining("3_4")).toEqual(["3_4"]);
+    expect(geo.componentContaining("2_2")).toEqual(["2_2"]); // 無 feature → 只有自己
+  });
+
+  it("cutBandKeys 列出某條切線的所有斜格鍵", () => {
+    const geo = new MapGeometry(
+      makeDoc({
+        grid: { w: 30, h: 20, cellPx: 10 },
+        cuts: [{ id: "w1", ax: 2, ay: 10, bx: 22, by: 10, side: 1, depth: 1, wall: true }],
+        cells: {
+          Bw1_0_0: { feature: "A" },
+          Bw1_3_0: { feature: "A" },
+          "1_1": { feature: "A" },
+        },
+      }),
+    );
+    expect(geo.cutBandKeys("w1").sort()).toEqual(["Bw1_0_0", "Bw1_3_0"]);
+    expect(geo.cutBandKeys("nope")).toEqual([]);
+  });
 });
 
 describe("MapGeometry — 框選（物件為單位）", () => {

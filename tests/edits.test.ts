@@ -11,6 +11,7 @@ import {
   ensureFeatureRegions,
   eraseCells,
   moveCutEndpoint,
+  type BandStashEntry,
   moveObjects,
   moveSelection,
   pasteObjects,
@@ -184,7 +185,7 @@ describe("物件選取：moveObjects / copyObjects / deleteObjects", () => {
     expect(doc.cells["4_4"]!.feature).toBeDefined();
   });
 
-  it("copyObjects 複製牆（新 id）與格內容、來源保留、feature 獨立不連動", () => {
+  it("copyObjects 複製牆（新 id）與格內容、來源保留、共用 feature id", () => {
     const doc = build();
     const r = copyObjects(doc, { cutIds: ["w1"], cellKeys: ["3_3"] }, 0, 4);
     expect(r.ok).toBe(true);
@@ -192,9 +193,9 @@ describe("物件選取：moveObjects / copyObjects / deleteObjects", () => {
     expect(r.cutIds[0]).not.toBe("w1");
     expect(doc.cells["3_3"]).toBeDefined();
     expect(doc.cells["7_3"]!.feature).toBeDefined();
-    // 複本用全新的 feature id → 不會跟來源被連動選取
-    expect(doc.cells["7_3"]!.feature).not.toBe(doc.cells["3_3"]!.feature);
-    expect(doc.features.length).toBe(2);
+    // 不再造新 feature id：複本與來源共用同一個（分開的兩塊，靠連通分量避免連動選取）
+    expect(doc.cells["7_3"]!.feature).toBe(doc.cells["3_3"]!.feature);
+    expect(doc.features.length).toBe(1);
   });
 
   it("deleteObjects 移除牆與格標記", () => {
@@ -297,5 +298,52 @@ describe("moveCutEndpoint：斜格內容依段索引搬移／犧牲", () => {
         .sort(),
     );
     expect(after).toBe(before);
+  });
+
+  it("stash：縮短犧牲的內容在同一次編輯內把線拉回去會復原", () => {
+    let doc = makeDoc({
+      grid: { w: 40, h: 20, cellPx: 10 },
+      cuts: [{ id: "w1", ax: 2, ay: 10, bx: 22, by: 10, side: 1, depth: 1, wall: true }],
+    });
+    doc.cells["Bw1_0_0"] = { cat: "c1", feature: "nearA" };
+    doc.cells["Bw1_18_0"] = { cat: "c1", feature: "nearB" };
+
+    const stash: BandStashEntry[] = [];
+    // b 端拉近 → 靠 b 的 nearB 被犧牲，進 stash
+    doc = moveCutEndpoint(doc, "w1", "b", 8, 10, stash);
+    let feats = new Set(
+      Object.keys(doc.cells)
+        .filter((k) => k.startsWith("Bw1_"))
+        .map((k) => doc.cells[k]!.feature),
+    );
+    expect(feats.has("nearA")).toBe(true);
+    expect(feats.has("nearB")).toBe(false);
+    expect(stash.length).toBeGreaterThan(0);
+
+    // 同一次編輯內把 b 端拉回原位 → nearB 復原
+    doc = moveCutEndpoint(doc, "w1", "b", 22, 10, stash);
+    feats = new Set(
+      Object.keys(doc.cells)
+        .filter((k) => k.startsWith("Bw1_"))
+        .map((k) => doc.cells[k]!.feature),
+    );
+    expect(feats.has("nearB")).toBe(true);
+    expect(stash.length).toBe(0);
+  });
+
+  it("stash：不帶 stash（切到別條線後）縮短再拉長不復原", () => {
+    let doc = makeDoc({
+      grid: { w: 40, h: 20, cellPx: 10 },
+      cuts: [{ id: "w1", ax: 2, ay: 10, bx: 22, by: 10, side: 1, depth: 1, wall: true }],
+    });
+    doc.cells["Bw1_18_0"] = { cat: "c1", feature: "nearB" };
+    doc = moveCutEndpoint(doc, "w1", "b", 8, 10); // 無 stash
+    doc = moveCutEndpoint(doc, "w1", "b", 22, 10);
+    const feats = new Set(
+      Object.keys(doc.cells)
+        .filter((k) => k.startsWith("Bw1_"))
+        .map((k) => doc.cells[k]!.feature),
+    );
+    expect(feats.has("nearB")).toBe(false);
   });
 });

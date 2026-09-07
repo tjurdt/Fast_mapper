@@ -24,10 +24,13 @@ export const objSelectTool: Tool = {
       ctx.actions.pickObjectGroup({ cutId: nearCut }, true, true);
       return;
     }
-    const feat =
-      ctx.geo.regularFeatureAtPoint(p.img.x, p.img.y) ?? ctx.geo.bandFeatureAtPoint(p.img.x, p.img.y);
-    if (feat) {
-      ctx.actions.pickObjectGroup({ featureId: feat }, true, true);
+    const bandKey = ctx.geo.bandCellAt(p.img.x, p.img.y);
+    if (bandKey && ctx.geo.cell(bandKey)?.feature) {
+      ctx.actions.pickObjectGroup({ cellKey: bandKey }, true, true);
+      return;
+    }
+    if (ctx.geo.cell(p.cell)?.feature) {
+      ctx.actions.pickObjectGroup({ cellKey: p.cell }, true, true);
       return;
     }
     ctx.actions.clearSelection();

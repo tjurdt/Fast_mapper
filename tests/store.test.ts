@@ -100,7 +100,31 @@ describe("store bootstrap", () => {
     expect(store.numbers.value).toEqual({ f1: 1, f2: 2 });
   });
 
-  it("pickObjectGroup：點店家會連同其斜格所屬的牆一起選（group）", async () => {
+  it("pickObjectGroup：只選中被點到的那一塊連通分量（分開的雙胞胎不連動）", async () => {
+    delete (globalThis as Record<string, unknown>).localStorage;
+    store._setAdapterForTests(new MemoryAdapter());
+    await store.createFromTemplate("blank-grid");
+    const cat = store.project.value!.doc.categories[0]!.id;
+    store.editDoc((doc) => {
+      doc.features.push({ id: "fA", name: "阿明", category: cat });
+      // 第一塊
+      doc.cells["1_1"] = { cat, feature: "fA" };
+      doc.cells["1_2"] = { cat, feature: "fA" };
+      // 分開的第二塊（同 feature，不相連）
+      doc.cells["8_8"] = { cat, feature: "fA" };
+      doc.cells["8_9"] = { cat, feature: "fA" };
+      return doc;
+    });
+    store.pickObjectGroup({ cellKey: "1_1" }, false, false);
+    expect([...store.selection.value].sort()).toEqual(["1_1", "1_2"]);
+    expect([...store.selection.value]).not.toContain("8_8");
+
+    // 再點同一塊 → toggle 取消
+    store.pickObjectGroup({ cellKey: "1_2" }, true, true);
+    expect([...store.selection.value]).toHaveLength(0);
+  });
+
+  it("pickObjectGroup：點牆會把牆上斜格所在的分量一起選（group）", async () => {
     delete (globalThis as Record<string, unknown>).localStorage;
     store._setAdapterForTests(new MemoryAdapter());
     await store.createFromTemplate("blank-grid");
@@ -108,19 +132,16 @@ describe("store bootstrap", () => {
     store.editDoc((doc) => {
       doc.cuts.push({ id: "w1", ax: 1, ay: 4, bx: 9, by: 4, side: 1, depth: 1, wall: true });
       doc.features.push({ id: "fA", name: "跨牆店", category: cat });
-      doc.cells["2_2"] = { cat, feature: "fA" }; // 一般格
       doc.cells["Bw1_0_0"] = { cat, feature: "fA" }; // 斜格
       return doc;
     });
-    store.pickObjectGroup({ featureId: "fA" }, false, false);
-    expect([...store.selection.value]).toContain("2_2");
+    store.pickObjectGroup({ cellKey: "Bw1_0_0" }, false, false);
     expect([...store.selectedCutIds.value]).toContain("w1");
 
-    // 反向：點牆 → 也把牆上的店家一般格帶進來
+    // 反向：點牆 → 把牆上斜格的分量帶進來（斜格由牆代表，不入 cells）
     store.clearSelection();
     store.pickObjectGroup({ cutId: "w1" }, false, false);
     expect([...store.selectedCutIds.value]).toContain("w1");
-    expect([...store.selection.value]).toContain("2_2");
   });
 
   it("editDoc 回傳 null → 不更新、不進歷史", async () => {

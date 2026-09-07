@@ -13,16 +13,17 @@ export default defineConfig({
     preact(),
     VitePWA({
       registerType: "autoUpdate",
-      includeAssets: ["apple-touch-icon.png"],
+      includeAssets: ["apple-touch-icon.png", "favicon.svg", "favicon-32.png"],
       manifest: {
         name: "Fast mapper",
         short_name: "Fast mapper",
         description: "通用的格線／底圖地圖繪製工具",
         lang: "zh-Hant",
-        theme_color: "#0e3b43",
-        background_color: "#eef1f0",
+        theme_color: "#3d322a",
+        background_color: "#f3ece0",
         display: "standalone",
         icons: [
+          { src: "favicon.svg", sizes: "any", type: "image/svg+xml" },
           { src: "icon-192.png", sizes: "192x192", type: "image/png" },
           { src: "icon-512.png", sizes: "512x512", type: "image/png" },
           { src: "icon-maskable.png", sizes: "512x512", type: "image/png", purpose: "maskable" },

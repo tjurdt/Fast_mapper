@@ -52,7 +52,7 @@ export interface ToolActions {
   /** 「選取」模式：以物件為單位選取 group / 框選物件 / 記錄貼上錨點。 */
   toggleCutSelected(cutId: string): void;
   selectWholeFeature(id: string, additive: boolean): void;
-  pickObjectGroup(seed: { cutId?: string; featureId?: string }, additive: boolean, toggle: boolean): void;
+  pickObjectGroup(seed: { cutId?: string; cellKey?: CellKey }, additive: boolean, toggle: boolean): void;
   objSelectRect(rect: ImgRect, additive: boolean): void;
   setPasteAnchor(cell: CellKey): void;
   toast(message: string): void;

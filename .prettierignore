@@ -1,0 +1,6 @@
+dist/
+node_modules/
+legacy/
+coverage/
+# 產生的大型資料檔（單行 JSON，勿格式化）
+src/templates/*.json

@@ -1,0 +1,108 @@
+/** 預設語系字串目錄。加語系：複製此檔、翻譯、在 i18n/index.ts 註冊。 */
+export const zhHant = {
+  "app.name": "Fast mapper",
+
+  "hub.title": "我的地圖",
+  "hub.new": "新增地圖",
+  "hub.empty": "還沒有任何地圖，選一個範本開始。",
+  "hub.open": "開啟",
+  "hub.delete": "刪除",
+  "hub.deleteConfirm": "確定刪除「{name}」？此動作無法復原。",
+  "hub.updatedAt": "更新於 {date}",
+
+  "template.pick": "選擇範本",
+  "template.create": "建立",
+  "template.back": "返回",
+
+  "editor.menu": "選單",
+  "editor.rename": "重新命名地圖",
+  "editor.renamePrompt": "地圖名稱",
+  "editor.undo": "復原",
+  "editor.redo": "重做",
+  "editor.backToHub": "切換地圖",
+
+  "tool.select": "選取",
+  "tool.cut": "切線／牆",
+  "tool.inspect": "檢視",
+
+  "view.actual": "實際",
+  "view.plan": "底圖",
+
+  "sel.count": "已選 {n} 格",
+  "sel.assign": "指定{feature}",
+  "sel.erase": "清除",
+  "sel.move": "移動",
+  "sel.clear": "取消選取",
+  "sel.moveHint": "每按一次移動一格，只移動實際分類與{feature}。",
+
+  "assign.title": "指定{category}與{feature}",
+  "assign.category": "{category}",
+  "assign.feature": "{feature}名稱",
+  "assign.featurePlaceholder": "留空自動命名",
+  "assign.ditto": "同上",
+  "assign.cancel": "取消",
+  "assign.apply": "套用",
+
+  "cell.title": "單格內容",
+  "cell.plan": "{planLayer}",
+  "cell.category": "{category}",
+  "cell.feature": "{feature}",
+  "cell.none": "（無）",
+  "cell.clear": "清除此格",
+  "cell.save": "儲存",
+
+  "cut.title": "切線設定",
+  "cut.depth": "帶深度",
+  "cut.side": "展開方向",
+  "cut.side.-1": "上側",
+  "cut.side.1": "下側",
+  "cut.side.0": "雙側",
+  "cut.wall": "實牆",
+  "cut.delete": "刪除切線",
+  "cut.done": "完成",
+
+  "legend.title": "圖例",
+  "legend.plan": "{planLayer}",
+  "legend.actual": "{category}",
+  "legend.count": "{n}",
+
+  "list.title": "{feature}清單",
+  "list.empty": "尚無{feature}。框選格子後指定分類即可建立。",
+  "list.search": "搜尋編號或名稱",
+  "list.edit": "編輯",
+  "list.rename": "{feature}名稱",
+  "list.category": "{category}",
+  "list.delete": "刪除此{feature}",
+
+  "cats.title": "管理{planLayer}與{category}",
+  "cats.planTab": "{planLayer}",
+  "cats.catTab": "{category}",
+  "cats.add": "新增",
+  "cats.done": "完成",
+  "cats.deleteConfirm": "刪除「{name}」？使用到的格子會一併清除該標記。",
+
+  "baseimg.title": "底圖圖片",
+  "baseimg.import": "匯入圖片",
+  "baseimg.remove": "移除",
+  "baseimg.opacity": "透明度",
+  "baseimg.scale": "縮放",
+
+  "settings.title": "設定",
+  "settings.showGrid": "格線",
+  "settings.showLabels": "編號",
+  "settings.showNames": "名稱",
+  "settings.fillA": "實際標記透明度",
+  "settings.grid": "調整網格",
+  "settings.gridW": "寬（格）",
+  "settings.gridH": "高（格）",
+  "settings.cats": "管理分區與分類",
+  "settings.export": "匯出",
+  "settings.importJson": "匯入 JSON",
+  "settings.exportJson": "備份 JSON",
+
+  "common.close": "關閉",
+  "common.cancel": "取消",
+  "common.ok": "確定",
+} as const;
+
+export type MessageKey = keyof typeof zhHant;

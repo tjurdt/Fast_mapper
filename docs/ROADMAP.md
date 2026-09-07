@@ -74,12 +74,23 @@
 **Phase 4 尚未移植（之後補）**：封閉區洪水框選（legacy `selectEnclosedAt`）、
 斜切格外形編輯、切線端點拖曳把手、「目標區域筆刷」模式（`toggleFeatureCell` 已有純函式、未接工具）。
 
-## Phase 5 — ui/ + i18n + 專案/範本切換 ⬜
+## Phase 5 — ui/ + i18n + 專案/範本切換 ✅
 
-- Preact 重建 header / topbar / sheet / 清單 / 圖例 / modal
-- `i18n/` + `vocabulary.ts`：移除所有寫死字串
-- ProjectPicker（多專案）、TemplatePicker（含 donggang-market 範本）
-- 底圖圖片匯入 UI
+- `src/i18n/` —— `t(key, params)` + `zh-Hant.ts` 字串目錄；`src/ui/vocab.ts` 的
+  `tv()` 自動代入專案 vocabulary（{feature} / {category} / {planLayer}）
+- `src/ui/` —— Preact 元件：
+  - `App` → `ProjectHub`（多專案清單 + 刪除）/ `TemplatePicker`（三個範本）/ `Editor`
+  - `Editor` = `Header` + `Toolbar`（工具 + 實際/底圖 + undo/redo + ⚙）+ `MapStage`
+    （掛 MapRenderer + InteractionController）+ `SelectionBar` + `CutBar` + `BottomPanel`
+    （清單 / 圖例 分頁）+ sheets
+  - sheets：`AssignSheet` / `CellDetailSheet` / `SettingsSheet` /
+    `CategoryModal`（分類·分區 CRUD + 顏色）/ `BaseImageSheet`（**底圖圖片匯入 + 透明度/縮放**）
+- `src/model/edits.ts` —— 分類/規劃層 CRUD、`setGridSize`
+- `src/store` —— 底圖 blob、JSON 匯入/匯出、分類/網格 actions
+- `src/main.tsx` —— `render(<App/>)`；舊的純 DOM `main.ts` 移除
+- 瀏覽器實測：Hub → 選範本建立東港地圖 → 框選指定分類建「101 阿珠海產」→
+  清單顯示編號、地圖畫出區域 → 開設定 / 分類管理，全程 vocabulary 生效，無 error
+- 68 個測試（UI 不寫單元測試）
 
 ## Phase 6 — export/ ⬜
 

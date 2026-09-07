@@ -7,7 +7,7 @@ import type { CellKey, MapDoc } from "../core/types";
 import { MapGeometry } from "../core/geometry";
 import { computeNumbers } from "../core/numbering";
 import { DocHistory } from "../model/commands";
-import { cloneDoc } from "../model/document";
+import { cloneDoc, loadProject, serializeProject } from "../model/document";
 import { createProject, type Project, type ViewSettings } from "../model/schema";
 import { templateById, TEMPLATES } from "../templates";
 import {
@@ -19,17 +19,24 @@ import {
 } from "../persistence";
 import { readLegacyProject } from "../model/legacy";
 import {
+  addCategory,
+  addPlanLayer,
   addWall,
   assignCells,
   cycleCutSide,
+  deleteCategory,
   deleteCut,
   deleteFeature,
+  deletePlanLayer,
   eraseCells,
   moveSelection,
   renameFeature,
   setFeatureCategory,
+  setGridSize,
   stepCutDepth,
   toggleCutWall,
+  updateCategory,
+  updatePlanLayer,
   type AssignArgs,
   type MoveDir,
   type MoveResult,
@@ -282,6 +289,83 @@ export function setFeatureCategoryAction(id: string, categoryId: string): void {
 export function deleteFeatureAction(id: string): void {
   editDoc((doc) => deleteFeature(doc, id));
   if (inspectedFeature.value === id) inspectedFeature.value = null;
+}
+
+// 分類 / 規劃層
+export function addCategoryAction(name: string, color: string): void {
+  editDoc((doc) => addCategory(doc, name, color));
+}
+export function updateCategoryAction(id: string, patch: { name?: string; color?: string }): void {
+  editDoc((doc) => updateCategory(doc, id, patch));
+}
+export function deleteCategoryAction(id: string): void {
+  editDoc((doc) => deleteCategory(doc, id));
+}
+export function addPlanLayerAction(name: string, color: string): void {
+  editDoc((doc) => addPlanLayer(doc, name, color));
+}
+export function updatePlanLayerAction(id: string, patch: { name?: string; color?: string }): void {
+  editDoc((doc) => updatePlanLayer(doc, id, patch));
+}
+export function deletePlanLayerAction(id: string): void {
+  editDoc((doc) => deletePlanLayer(doc, id));
+}
+export function setGridSizeAction(w: number, h: number): void {
+  editDoc((doc) => setGridSize(doc, w, h));
+}
+
+// 底圖圖片
+export async function importBaseImage(file: Blob): Promise<void> {
+  const p = project.value;
+  if (!p) return;
+  const blobId = "img" + Date.now().toString(36);
+  await adapter.putBlob(blobId, file);
+  editDoc((doc) => {
+    doc.baseImage = { blobId, opacity: 0.6, transform: { x: 0, y: 0, scale: 1, rotation: 0 } };
+    return doc;
+  });
+}
+export async function removeBaseImage(): Promise<void> {
+  const p = project.value;
+  const blobId = p?.doc.baseImage?.blobId;
+  editDoc((doc) => {
+    delete doc.baseImage;
+    return doc;
+  });
+  if (blobId) await adapter.deleteBlob(blobId);
+}
+export function setBaseImageOpacity(opacity: number): void {
+  editDoc((doc) => {
+    if (doc.baseImage) doc.baseImage = { ...doc.baseImage, opacity };
+    return doc;
+  });
+}
+export function setBaseImageTransform(
+  patch: Partial<{ x: number; y: number; scale: number; rotation: number }>,
+): void {
+  editDoc((doc) => {
+    if (doc.baseImage)
+      doc.baseImage = { ...doc.baseImage, transform: { ...doc.baseImage.transform, ...patch } };
+    return doc;
+  });
+}
+
+// JSON 備份 / 匯入
+export function exportProjectJson(): string {
+  const p = project.value;
+  return p ? JSON.stringify(serializeProject(p), null, 2) : "{}";
+}
+export async function importProjectJson(text: string): Promise<boolean> {
+  try {
+    const p = loadProject(JSON.parse(text));
+    const fresh: Project = { ...p, id: p.id || createProject().id, updatedAt: Date.now() };
+    setProject(fresh);
+    await persistNow();
+    await refreshProjectList();
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 export async function refreshProjectList(): Promise<void> {

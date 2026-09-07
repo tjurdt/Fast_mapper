@@ -224,6 +224,64 @@ export function deleteFeature(doc: MapDoc, id: string): MapDoc {
   return doc;
 }
 
+// ---- 分類 / 規劃層 CRUD ----
+
+export function addCategory(doc: MapDoc, name: string, color: string): MapDoc {
+  doc.categories.push({ id: rid("c"), name: name.trim() || "分類", color });
+  return doc;
+}
+
+export function updateCategory(doc: MapDoc, id: string, patch: { name?: string; color?: string }): MapDoc {
+  const c = doc.categories.find((x) => x.id === id);
+  if (!c) return doc;
+  if (patch.name !== undefined) c.name = patch.name.trim() || c.name;
+  if (patch.color !== undefined) c.color = patch.color;
+  return doc;
+}
+
+export function deleteCategory(doc: MapDoc, id: string): MapDoc {
+  doc.categories = doc.categories.filter((c) => c.id !== id);
+  doc.features = doc.features.filter((f) => f.category !== id);
+  for (const k in doc.cells) {
+    const d = doc.cells[k]!;
+    if (d.cat === id) delete d.cat;
+    if (d.feature && !doc.features.some((f) => f.id === d.feature)) delete d.feature;
+    if (!d.plan && !d.cat && !d.feature && !d.poly) delete doc.cells[k];
+  }
+  return doc;
+}
+
+export function addPlanLayer(doc: MapDoc, name: string, color: string): MapDoc {
+  doc.planLayers.push({ id: rid("z"), name: name.trim() || "分區", color });
+  return doc;
+}
+
+export function updatePlanLayer(doc: MapDoc, id: string, patch: { name?: string; color?: string }): MapDoc {
+  const z = doc.planLayers.find((x) => x.id === id);
+  if (!z) return doc;
+  if (patch.name !== undefined) z.name = patch.name.trim() || z.name;
+  if (patch.color !== undefined) z.color = patch.color;
+  return doc;
+}
+
+export function deletePlanLayer(doc: MapDoc, id: string): MapDoc {
+  doc.planLayers = doc.planLayers.filter((z) => z.id !== id);
+  for (const k in doc.cells) {
+    const d = doc.cells[k]!;
+    if (d.plan !== id) continue;
+    delete d.plan;
+    if (!d.cat && !d.feature && !d.poly) delete doc.cells[k];
+  }
+  return doc;
+}
+
+// ---- 網格 ----
+
+export function setGridSize(doc: MapDoc, w: number, h: number): MapDoc {
+  doc.grid = { ...doc.grid, w: Math.max(1, Math.round(w)), h: Math.max(1, Math.round(h)) };
+  return doc;
+}
+
 // ---- 格子外形（斜切）----
 
 export function setCellShape(doc: MapDoc, key: CellKey, poly: CellPoly | null): MapDoc {

@@ -54,7 +54,9 @@ core/        純網域邏輯：幾何、band、編號、taxonomy。零 DOM、零
 - `src/vocabulary.ts` —— 每個專案自訂「規劃層 / 分類 / 命名區域」怎麼稱呼
   （市場叫「店家」，展場可能叫「展位」，教室可能叫「座位」）
 
-絕對不要在 `core/` / `render/` / `model/` 裡寫死中文。
+絕對不要在 `core/` / `render/` / `model/` 裡寫死中文。UI 元件用 `src/ui/vocab.ts`
+的 `tv(key)` —— 它是 `t()` 加上自動代入目前專案的 vocabulary 佔位。新字串加到
+`src/i18n/zh-Hant.ts`（`MessageKey` 會自動更新）。
 
 ## 常見任務怎麼做
 

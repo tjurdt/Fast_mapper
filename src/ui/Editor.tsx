@@ -1,4 +1,5 @@
 import { useEffect, useState } from "preact/hooks";
+import * as store from "../store";
 import { uiEvents } from "../store";
 import { t } from "../i18n";
 import { MapStage } from "./MapStage";
@@ -13,9 +14,10 @@ import {
   CategoryModal,
   BaseImageSheet,
   ExportSheet,
+  CopySheet,
 } from "./sheets";
 
-type SheetId = "assign" | "cell" | "settings" | "cats" | "baseimg" | "export" | null;
+type SheetId = "assign" | "cell" | "settings" | "cats" | "baseimg" | "export" | "copy" | null;
 
 export function Editor() {
   const [sheet, setSheet] = useState<SheetId>(null);
@@ -35,6 +37,8 @@ export function Editor() {
   }, []);
 
   const close = () => setSheet(null);
+  const barActive =
+    store.selection.value.size > 0 || !!store.editingCutId.value || !!store.activeFeatureId.value;
 
   return (
     <div class="appshell">
@@ -42,20 +46,28 @@ export function Editor() {
       <div class="workspace">
         <div class="workmain">
           <Toolbar />
-          <MapStage onAssign={() => setSheet("assign")} />
+          <MapStage onAssign={() => setSheet("assign")} onCopy={() => setSheet("copy")} />
         </div>
         <div class={panelOpen ? "sidewrap open" : "sidewrap"}>
-          <SidePanel />
+          <SidePanel onClosePanel={() => setPanelOpen(false)} />
         </div>
       </div>
 
-      <button class="panel-fab" onClick={() => setPanelOpen(!panelOpen)} aria-label={t("panel.toggle")}>
-        <LegendIcon size={18} />
-      </button>
+      {!barActive && (
+        <button
+          class="panel-fab"
+          onClick={() => setPanelOpen(!panelOpen)}
+          aria-label={t("panel.toggle")}
+          title={t("panel.toggle")}
+        >
+          <LegendIcon size={18} />
+        </button>
+      )}
 
       <ToastHost />
 
       {sheet === "assign" && <AssignSheet onClose={close} />}
+      {sheet === "copy" && <CopySheet onClose={close} />}
       {sheet === "cell" && cellKey && <CellDetailSheet cellKey={cellKey} onClose={close} />}
       {sheet === "settings" && (
         <SettingsSheet

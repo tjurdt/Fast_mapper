@@ -84,6 +84,18 @@ describe("MapGeometry — band 覆蓋", () => {
   });
 });
 
+describe("MapGeometry — featureBounds", () => {
+  it("回傳所有可見格的影像座標包圍盒", () => {
+    const geo = new MapGeometry(
+      makeDoc({
+        cells: { "1_1": { feature: "A" }, "1_2": { feature: "A" }, "3_1": { feature: "A" } },
+      }),
+    );
+    expect(geo.featureBounds("A")).toEqual([14, 14, 42, 56]);
+    expect(geo.featureBounds("missing")).toBeNull();
+  });
+});
+
 describe("MapGeometry — 連通分量", () => {
   it("分開的兩塊算兩個分量", () => {
     const geo = new MapGeometry(

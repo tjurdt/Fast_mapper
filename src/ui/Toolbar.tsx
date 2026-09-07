@@ -5,21 +5,21 @@ import * as store from "../store";
 
 const ICON: Record<string, string> = {
   select: "▦",
-  paint: "🖌",
   cut: "／",
-  inspect: "◎",
+  paint: "🖌",
 };
 
 export function Toolbar() {
   const active = store.activeToolId.value;
   return (
-    <div class="toolbar">
+    <div class="toolbar" role="tablist">
       {TOOLS.map((tool) => (
         <button
           key={tool.id}
+          role="tab"
+          aria-selected={active === tool.id}
           class={active === tool.id ? "tool on" : "tool"}
           onClick={() => store.setTool(tool.id)}
-          title={t(tool.labelKey as MessageKey)}
         >
           <span class="tool-ic" aria-hidden="true">
             {ICON[tool.id] ?? "•"}

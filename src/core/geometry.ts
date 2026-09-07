@@ -248,6 +248,25 @@ export class MapGeometry {
       .filter((p): p is Point => !!p);
   }
 
+  /** feature 所有可見格的影像座標包圍盒 [x0,y0,x1,y1]；無格則 null。 */
+  featureBounds(id: string, keys?: CellKey[]): [number, number, number, number] | null {
+    let x0 = Infinity;
+    let y0 = Infinity;
+    let x1 = -Infinity;
+    let y1 = -Infinity;
+    for (const k of keys ?? this.featureKeys(id)) {
+      const q = this.keyQuad(k);
+      if (!q) continue;
+      for (const [px, py] of q) {
+        if (px < x0) x0 = px;
+        if (py < y0) y0 = py;
+        if (px > x1) x1 = px;
+        if (py > y1) y1 = py;
+      }
+    }
+    return x1 >= x0 ? [x0, y0, x1, y1] : null;
+  }
+
   /** feature 的「首格」位置 [row, col]（最小 row，再最小 col），給匯出對照表用。 */
   featureAnchor(id: string, keys?: CellKey[]): [number, number] | null {
     let best: [number, number] | null = null;

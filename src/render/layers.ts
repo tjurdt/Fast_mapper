@@ -1,8 +1,8 @@
 /**
- * 螢幕分層繪圖。地圖內容用 primitives.ts 的共用基元；這裡只多加互動用的疊層
- * （選取、拖曳框、幽靈切線、高亮）。ctx 變換已由 renderer 設好（影像單位空間）。
+ * 三個螢幕圖層的繪製函式。地圖內容用 primitives.ts 的共用基元；
+ * ctx 變換已由 renderer 設好（影像單位空間）。
  */
-import { fillQuad, hexA, strokeQuad } from "./draw2d";
+import { hexA, strokeQuad } from "./draw2d";
 import {
   drawActualFill,
   drawBandCells,
@@ -15,13 +15,15 @@ import {
 } from "./primitives";
 import type { Scene, SceneDims } from "./scene";
 
+/** base：規劃分區底色（底圖圖片由 renderer 另外疊上）。 */
 export function drawBaseLayer(ctx: CanvasRenderingContext2D, scene: Scene, dims: SceneDims): void {
   ctx.fillStyle = "#f5f7f7";
   ctx.fillRect(0, 0, dims.imgW, dims.imgH);
   drawPlanFill(ctx, scene.doc, dims, scene.view.view === "plan" ? 0.95 : 0.3);
 }
 
-export function drawOverlayLayer(ctx: CanvasRenderingContext2D, scene: Scene, dims: SceneDims): void {
+/** content：格線 / 實際分類 / band / 邊界 / 標籤 / 牆。文件編輯時才重畫。 */
+export function drawContentLayer(ctx: CanvasRenderingContext2D, scene: Scene, dims: SceneDims): void {
   const { doc, geo, view } = scene;
   const a = view.fillA / 100;
   const actual = view.view === "actual";
@@ -40,8 +42,11 @@ export function drawOverlayLayer(ctx: CanvasRenderingContext2D, scene: Scene, di
       nameFont: dims.ch * 0.75,
     });
   }
-
   drawWallLines(ctx, doc, dims, scene.cutMode);
+}
+
+/** interaction：選取 / 拖曳框 / 幽靈切線 / 端點把手 / 高亮。每幀重畫，但便宜。 */
+export function drawInteractionLayer(ctx: CanvasRenderingContext2D, scene: Scene, dims: SceneDims): void {
   drawSelection(ctx, scene);
   drawHighlight(ctx, scene, dims);
   drawDragRect(ctx, scene, dims);
@@ -51,33 +56,13 @@ export function drawOverlayLayer(ctx: CanvasRenderingContext2D, scene: Scene, di
 
 function drawSelection(ctx: CanvasRenderingContext2D, scene: Scene): void {
   if (!scene.selection.size) return;
+  ctx.fillStyle = hexA("#e2603f", 0.35);
   for (const k of scene.selection) {
     const q = scene.geo.selectionQuad(k, scene.selectionShapes.get(k));
-    if (q) fillQuad(ctx, q, hexA("#e2603f", 0.35));
-  }
-}
-
-function drawCutHandles(ctx: CanvasRenderingContext2D, scene: Scene, dims: SceneDims): void {
-  const cut = scene.editingCut;
-  if (!cut) return;
-  const ax = cut.ax * dims.cw;
-  const ay = cut.ay * dims.ch;
-  const bx = cut.bx * dims.cw;
-  const by = cut.by * dims.ch;
-  ctx.strokeStyle = "#d64f27";
-  ctx.lineWidth = Math.max(1.2, dims.cw * 0.2);
-  ctx.setLineDash([]);
-  ctx.beginPath();
-  ctx.moveTo(ax, ay);
-  ctx.lineTo(bx, by);
-  ctx.stroke();
-  ctx.fillStyle = "#d64f27";
-  for (const [hx, hy] of [
-    [ax, ay],
-    [bx, by],
-  ] as const) {
+    if (!q) continue;
     ctx.beginPath();
-    ctx.arc(hx, hy, Math.max(2, dims.cw * 0.55), 0, 7);
+    q.forEach((pt, i) => (i ? ctx.lineTo(pt[0], pt[1]) : ctx.moveTo(pt[0], pt[1])));
+    ctx.closePath();
     ctx.fill();
   }
 }
@@ -126,4 +111,29 @@ function drawGhostCut(ctx: CanvasRenderingContext2D, scene: Scene, dims: SceneDi
     ctx.fill();
   }
   ctx.restore();
+}
+
+function drawCutHandles(ctx: CanvasRenderingContext2D, scene: Scene, dims: SceneDims): void {
+  const cut = scene.editingCut;
+  if (!cut) return;
+  const ax = cut.ax * dims.cw;
+  const ay = cut.ay * dims.ch;
+  const bx = cut.bx * dims.cw;
+  const by = cut.by * dims.ch;
+  ctx.strokeStyle = "#d64f27";
+  ctx.lineWidth = Math.max(1.2, dims.cw * 0.2);
+  ctx.setLineDash([]);
+  ctx.beginPath();
+  ctx.moveTo(ax, ay);
+  ctx.lineTo(bx, by);
+  ctx.stroke();
+  ctx.fillStyle = "#d64f27";
+  for (const [hx, hy] of [
+    [ax, ay],
+    [bx, by],
+  ] as const) {
+    ctx.beginPath();
+    ctx.arc(hx, hy, Math.max(2, dims.cw * 0.55), 0, 7);
+    ctx.fill();
+  }
 }

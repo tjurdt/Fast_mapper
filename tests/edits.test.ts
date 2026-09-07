@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   addWall,
   assignCells,
+  copySelection,
   deleteCut,
   deleteFeature,
   ensureFeatureRegions,
@@ -58,6 +59,27 @@ describe("eraseCells", () => {
     expect(doc.cells["0_0"]).toEqual({ plan: "z1" });
     expect(doc.cells["0_1"]).toBeUndefined();
     expect(doc.features).toHaveLength(0);
+  });
+});
+
+describe("copySelection", () => {
+  it("複製實際標記到位移處、來源保留", () => {
+    let doc = makeDoc({ categories: [{ id: "c1", name: "A", color: "#111" }] });
+    doc = assignCells(doc, ["1_1"], { categoryId: "c1", featureName: "x" });
+    const r = copySelection(doc, ["1_1"], 0, 3); // 右方 3 格
+    expect(r.ok).toBe(true);
+    expect(r.keys).toEqual(["1_4"]);
+    expect(doc.cells["1_1"]!.feature).toBeDefined(); // 來源還在
+    expect(doc.cells["1_4"]!.feature).toBe(doc.cells["1_1"]!.feature);
+  });
+
+  it("越界則拒絕", () => {
+    let doc = makeDoc({
+      grid: { w: 5, h: 5, cellPx: 14 },
+      categories: [{ id: "c1", name: "A", color: "#111" }],
+    });
+    doc = assignCells(doc, ["0_0"], { categoryId: "c1", featureName: "x" });
+    expect(copySelection(doc, ["0_0"], -2, 0).ok).toBe(false);
   });
 });
 

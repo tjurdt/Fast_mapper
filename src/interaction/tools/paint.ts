@@ -14,7 +14,7 @@ export const paintTool: Tool = {
       const id =
         ctx.geo.regularFeatureAtPoint(p.img.x, p.img.y) ?? ctx.geo.bandFeatureAtPoint(p.img.x, p.img.y);
       if (id) ctx.actions.setActiveFeature(id);
-      else ctx.actions.toast("先點一個既有區域當作筆刷目標");
+      else ctx.actions.toast("先點一個既有區域設為筆刷");
       return;
     }
     ctx.actions.paintCell(p.cell);

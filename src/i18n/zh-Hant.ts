@@ -23,12 +23,11 @@ export const zhHant = {
 
   "tool.select": "選取",
   "tool.paint": "筆刷",
-  "tool.cut": "切線／牆",
-  "tool.inspect": "檢視",
+  "tool.cut": "線條",
 
-  "hint.select": "點按多選・拖曳框選・雙指縮放",
-  "hint.paint": "先點一個區域當筆刷目標，再點格加入／移出",
-  "hint.cut": "拖曳畫牆・點牆編輯・點封閉空白處全選",
+  "hint.select": "點選或拖曳框選格子・方向鍵可移動選取",
+  "hint.paint": "點一個區域設為筆刷，再點／拖曳格子加入或移出",
+  "hint.cut": "拖曳畫線・點線編輯・點封閉空白處全選",
 
   "zoom.in": "放大",
   "zoom.out": "縮小",
@@ -39,12 +38,21 @@ export const zhHant = {
   "view.plan": "底圖",
 
   "sel.count": "{n} 格",
-  "sel.assign": "指定{feature}",
+  "sel.edit": "編輯",
   "sel.erase": "清除",
   "sel.move": "移動",
+  "sel.copy": "複製…",
   "sel.done": "完成",
   "sel.clear": "取消選取",
-  "sel.moveHint": "每按一次移動一格，只移動實際分類與{feature}。",
+
+  "copy.title": "複製選取內容",
+  "copy.direction": "方向",
+  "copy.distance": "距離（格）",
+  "copy.apply": "複製",
+  "copy.dir.up": "上方",
+  "copy.dir.down": "下方",
+  "copy.dir.left": "左方",
+  "copy.dir.right": "右方",
 
   "paint.hint": "點格加入／移出",
 
@@ -121,6 +129,7 @@ export const zhHant = {
   "common.cancel": "取消",
   "common.ok": "確定",
   "common.done": "完成",
+  "common.back": "返回",
 } as const;
 
 export type MessageKey = keyof typeof zhHant;

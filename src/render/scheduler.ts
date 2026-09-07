@@ -1,8 +1,14 @@
 /**
- * rAF 批次重繪。元件 / store 只呼叫 request*()，實際 draw 在下一個動畫影格
+ * rAF 批次重繪。呼叫端只 request 需要重畫的圖層，實際 draw 在下一個動畫影格
  * 合併執行一次。
+ *
+ * 三層：
+ *  - base        規劃分區底色 + 底圖圖片（很少變）
+ *  - content     格線 / 實際分類 / band / 邊界 / 標籤 / 牆（文件編輯時變）
+ *  - interaction 選取 / 拖曳框 / 幽靈切線 / 端點把手 / 高亮（互動時每幀變，但便宜）
  */
-export type Layer = "base" | "overlay";
+export type Layer = "base" | "content" | "interaction";
+export const ALL_LAYERS: Layer[] = ["base", "content", "interaction"];
 
 export class RenderScheduler {
   private raf = 0;
@@ -26,11 +32,11 @@ export class RenderScheduler {
   }
 
   requestAll(): void {
-    this.request("base", "overlay");
+    this.request(...ALL_LAYERS);
   }
 
-  /** 立即同步重繪（例如視窗 resize、匯出前）。 */
-  flushNow(layers: Layer[] = ["base", "overlay"]): void {
+  /** 立即同步重繪（視窗 resize、匯出前、pan/zoom 結束）。 */
+  flushNow(layers: Layer[] = ALL_LAYERS): void {
     if (this.raf) {
       if (typeof cancelAnimationFrame === "function") cancelAnimationFrame(this.raf);
       else clearTimeout(this.raf);

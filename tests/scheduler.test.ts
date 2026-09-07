@@ -5,9 +5,9 @@ describe("RenderScheduler", () => {
   it("flushNow 同步觸發並帶指定圖層", () => {
     const flush = vi.fn();
     const s = new RenderScheduler(flush);
-    s.flushNow(["overlay"]);
+    s.flushNow(["content"]);
     expect(flush).toHaveBeenCalledOnce();
-    expect([...flush.mock.calls[0]![0]]).toEqual(["overlay"]);
+    expect([...flush.mock.calls[0]![0]]).toEqual(["content"]);
   });
 
   it("多次 request 在一個影格內合併", async () => {
@@ -16,11 +16,11 @@ describe("RenderScheduler", () => {
     const s = new RenderScheduler(flush);
     s.request("base");
     s.request("base");
-    s.request("overlay");
+    s.request("content");
     expect(flush).not.toHaveBeenCalled();
     await vi.advanceTimersByTimeAsync(20);
     expect(flush).toHaveBeenCalledOnce();
-    expect([...flush.mock.calls[0]![0]].sort()).toEqual(["base", "overlay"]);
+    expect([...flush.mock.calls[0]![0]].sort()).toEqual(["base", "content"]);
     vi.useRealTimers();
   });
 });

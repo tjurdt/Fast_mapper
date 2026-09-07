@@ -3,31 +3,61 @@ import { effect } from "@preact/signals";
 import { MapRenderer } from "../render";
 import { InteractionController } from "../interaction";
 import * as store from "../store";
+import { uiEvents } from "../store";
 import { ZoomStack, MapHint, ActionBar } from "./overlays";
 
-/** 承載兩張 canvas + 地圖上的懸浮控制項。 */
-export function MapStage({ onAssign }: { onAssign: () => void }) {
+/** 承載三張 canvas + 地圖上的懸浮控制項。 */
+export function MapStage({ onAssign, onCopy }: { onAssign: () => void; onCopy: () => void }) {
   const wrapRef = useRef<HTMLDivElement>(null);
   const stageRef = useRef<HTMLDivElement>(null);
   const baseRef = useRef<HTMLCanvasElement>(null);
-  const overlayRef = useRef<HTMLCanvasElement>(null);
+  const contentRef = useRef<HTMLCanvasElement>(null);
+  const interRef = useRef<HTMLCanvasElement>(null);
   const rendererRef = useRef<MapRenderer | null>(null);
 
   useEffect(() => {
-    if (!wrapRef.current || !stageRef.current || !baseRef.current || !overlayRef.current) return;
-    const renderer = new MapRenderer(stageRef.current, baseRef.current, overlayRef.current, {
-      loadBlob: store.loadBlob,
-    });
+    if (!wrapRef.current || !stageRef.current || !baseRef.current || !contentRef.current || !interRef.current)
+      return;
+    const renderer = new MapRenderer(
+      stageRef.current,
+      baseRef.current,
+      contentRef.current,
+      interRef.current,
+      { loadBlob: store.loadBlob },
+    );
     rendererRef.current = renderer;
     const controller = new InteractionController(renderer, wrapRef.current);
     const stopScene = effect(() => {
       void renderer.setScene(store.scene.value);
     });
-    const onResize = () => renderer.fit();
+
+    const onResize = () => renderer.resize();
     window.addEventListener("resize", onResize);
+
+    const offFocus = uiEvents.on("focus-feature", (id) => {
+      const geo = store.geometry.value;
+      if (!geo) return;
+      const b = geo.featureBounds(id);
+      if (b) renderer.frameRegion(b[0], b[1], b[2], b[3], geo.cw * 2);
+    });
+
+    const onKey = (e: KeyboardEvent) => {
+      const tag = (e.target as HTMLElement | null)?.tagName;
+      if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return;
+      const dir = { ArrowUp: "up", ArrowDown: "down", ArrowLeft: "left", ArrowRight: "right" }[e.key] as
+        "up" | "down" | "left" | "right" | undefined;
+      if (!dir || !store.selection.value.size) return;
+      e.preventDefault();
+      const r = store.moveSelectionBy(dir);
+      if (!r.ok && r.reason) uiEvents.emit("toast", r.reason);
+    };
+    window.addEventListener("keydown", onKey);
+
     return () => {
       stopScene();
+      offFocus();
       window.removeEventListener("resize", onResize);
+      window.removeEventListener("keydown", onKey);
       controller.dispose();
       renderer.dispose();
       rendererRef.current = null;
@@ -45,12 +75,13 @@ export function MapStage({ onAssign }: { onAssign: () => void }) {
   return (
     <div class="stagewrap" ref={wrapRef}>
       <div class="stage" ref={stageRef}>
-        <canvas id="base" ref={baseRef} />
-        <canvas id="overlay" ref={overlayRef} />
+        <canvas class="lyr" ref={baseRef} />
+        <canvas class="lyr" ref={contentRef} />
+        <canvas class="lyr" ref={interRef} />
       </div>
       <MapHint />
       <ZoomStack onZoom={zoom} onFit={() => rendererRef.current?.fit()} />
-      <ActionBar onAssign={onAssign} />
+      <ActionBar onAssign={onAssign} onCopy={onCopy} />
     </div>
   );
 }

@@ -55,6 +55,54 @@ export function AssignSheet({ onClose }: { onClose: () => void }) {
   );
 }
 
+// ---- 複製選取內容 ----
+
+export function CopySheet({ onClose }: { onClose: () => void }) {
+  const [dir, setDir] = useState<"up" | "down" | "left" | "right">("right");
+  const [dist, setDist] = useState(5);
+  return (
+    <Dialog
+      title={t("copy.title")}
+      onClose={onClose}
+      footer={
+        <>
+          <button onClick={onClose}>{t("common.cancel")}</button>
+          <button
+            class="primary"
+            onClick={() => {
+              const r = store.copySelectionBy(dir, dist);
+              if (!r.ok && r.reason) alert(r.reason);
+              onClose();
+            }}
+          >
+            {t("copy.apply")}
+          </button>
+        </>
+      }
+    >
+      <label class="fieldrow">
+        <span>{t("copy.direction")}</span>
+        <select value={dir} onChange={(e) => setDir((e.target as HTMLSelectElement).value as typeof dir)}>
+          <option value="up">{t("copy.dir.up")}</option>
+          <option value="down">{t("copy.dir.down")}</option>
+          <option value="left">{t("copy.dir.left")}</option>
+          <option value="right">{t("copy.dir.right")}</option>
+        </select>
+      </label>
+      <label class="fieldrow">
+        <span>{t("copy.distance")}</span>
+        <input
+          class="field"
+          type="number"
+          min="1"
+          value={dist}
+          onInput={(e) => setDist(Number((e.target as HTMLInputElement).value) || 1)}
+        />
+      </label>
+    </Dialog>
+  );
+}
+
 // ---- 單格內容 ----
 
 export function CellDetailSheet({ cellKey, onClose }: { cellKey: string; onClose: () => void }) {

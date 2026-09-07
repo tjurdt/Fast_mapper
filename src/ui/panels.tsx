@@ -2,12 +2,13 @@ import { useState } from "preact/hooks";
 import { t } from "../i18n";
 import { tv } from "./vocab";
 import * as store from "../store";
+import { uiEvents } from "../store";
 import { LegendIcon } from "./widgets";
 
 type Tab = "list" | "legend";
 
-/** 桌機：地圖右側常駐側欄；手機：底部可收合面板。由 CSS 切換。 */
-export function SidePanel() {
+/** 桌機：地圖右側常駐側欄；手機：底部抽屜。由 CSS 切換。 */
+export function SidePanel({ onClosePanel }: { onClosePanel: () => void }) {
   const [tab, setTab] = useState<Tab>("list");
   const [open, setOpen] = useState(true);
   const p = store.project.value;
@@ -24,8 +25,16 @@ export function SidePanel() {
           {t("legend.title")}
         </button>
         <span class="grow" />
-        <button class="icon sp-collapse" aria-label={t("panel.toggle")} onClick={() => setOpen(!open)}>
+        <button
+          class="icon sp-collapse"
+          aria-label={t("panel.toggle")}
+          title={t("panel.toggle")}
+          onClick={() => setOpen(!open)}
+        >
           {open ? "⟩" : "⟨"}
+        </button>
+        <button class="sp-done" onClick={onClosePanel}>
+          {t("common.done")}
         </button>
       </div>
       {open && (tab === "list" ? <FeatureList /> : <Legend />)}
@@ -45,6 +54,12 @@ function FeatureList() {
 
   if (!p.doc.features.length) return <p class="sp-empty">{tv("list.empty")}</p>;
 
+  const focus = (id: string) => {
+    const same = store.inspectedFeature.value === id;
+    store.inspectFeature(same ? null : id);
+    if (!same) uiEvents.emit("focus-feature", id); // 只有這裡會 zoom 到特定物件
+  };
+
   return (
     <div class="sp-body">
       <input
@@ -58,11 +73,7 @@ function FeatureList() {
         {rows.map(({ f, n }) => {
           const active = store.inspectedFeature.value === f.id || store.activeFeatureId.value === f.id;
           return (
-            <li
-              key={f.id}
-              class={active ? "on" : ""}
-              onClick={() => store.inspectFeature(store.inspectedFeature.value === f.id ? null : f.id)}
-            >
+            <li key={f.id} class={active ? "on" : ""} onClick={() => focus(f.id)}>
               <span class="numbadge">{n ?? "–"}</span>
               <span class="dot" style={{ background: catColor.get(f.category) ?? "#ccc" }} />
               <span class="nm">{f.name}</span>
@@ -123,7 +134,8 @@ function Legend() {
         {p.doc.planLayers.map((z) => (
           <li key={z.id}>
             <span class="sw" style={{ background: z.color }} />
-            {z.name} <span class="muted">{planCount[z.id] ?? 0}</span>
+            <span class="lg-nm">{z.name}</span>
+            <span class="muted">{planCount[z.id] ?? 0}</span>
           </li>
         ))}
       </ul>
@@ -132,7 +144,8 @@ function Legend() {
         {p.doc.categories.map((c) => (
           <li key={c.id}>
             <span class="sw" style={{ background: c.color }} />
-            {c.name} <span class="muted">{catCount[c.id] ?? 0}</span>
+            <span class="lg-nm">{c.name}</span>
+            <span class="muted">{catCount[c.id] ?? 0}</span>
           </li>
         ))}
       </ul>

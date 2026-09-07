@@ -135,6 +135,24 @@
 - `tests/` —— 共 82 個測試（+6：enclosed、shapes）
 - 瀏覽器實測（桌機 + 手機 + 深色）：四項功能 + 新版面皆正常，無 error
 
+## Phase 9 — 效能 + UX 徹底盤點 ✅
+
+- **效能**：render 從 2 canvas 拆成 **3 層**（base / content / interaction）。
+  `setScene` 比對前後 scene，選取／拖曳框只重畫最上層便宜的 interaction；文件
+  編輯才重畫 content。`MAX_DPR` 降 2 → 手機複雜地圖不再卡頓
+- **修掉亂 zoom**：舊 `setScene` 以 `doc.grid` **物件識別**判斷是否 refit，但
+  `editDoc` 每次 clone 讓 grid 換新物件 → 每次編輯都跳全覽。改成比對**尺寸值**；
+  視窗 resize 改 `renderer.resize()`（保留視角）。**只有**全覽鈕與「點清單項目」
+  （`frameRegion` 聚焦該區域）會改縮放
+- **動作列重做（無外框）**：選取 →『編輯 / 移動 / 清除 / 完成』四鈕，各帶陰影 +
+  色彩標記；桌機加大、手機整條貼底水平等分。切線編輯用循環鈕；選取時 FAB 讓位
+- **移動模式**：選取列點「移動」→『↑ ↓ ← → | 複製… | 返回』。方向鍵也能移動選取。
+  `複製…` 開對話框（方向 + 距離），複製選取內容到某方向第 n 格（`copySelection`）
+- **合併 檢視 + 筆刷**（`inspect` 工具移除）；工具「切線／牆」改名「線條」
+- 字級 / RWD 全面盤點：桌機改 flex shell 修水平溢位、字放大；手機 header 縮排、
+  工具列可捲
+- `tests/` —— 85 個測試（+3）
+
 ## 驗證清單
 
 - [ ] 舊 `grid-market-v4` localStorage 內容 → 自動匯入為「東港華僑市場」專案，

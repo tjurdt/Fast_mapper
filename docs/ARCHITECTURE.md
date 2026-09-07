@@ -104,12 +104,18 @@ core/        純網域邏輯：幾何、band、編號、taxonomy。零 DOM、零
 - `gestures.ts` 的 `onDown` 會忽略落在 `button/input/.zoomstack/.actionbar/...` 上的
   指標事件，讓懸浮控制項可正常點按。
 
-## 渲染策略（沿用 legacy 的做法，別重造）
+## 渲染策略（效能關鍵）
 
-- 兩張 `<canvas>`（base + overlay）疊在一個 `#stage` 容器裡。
-- pan/zoom 期間只改容器的 CSS `transform`（便宜），停止操作約 110ms 後才
-  重新以正確解析度光柵化。
+- **三張 `<canvas>`** 疊在一個 `#stage` 容器裡，各畫不同東西：
+  - `base` —— 規劃分區底色 + 底圖圖片（很少變）
+  - `content` —— 格線 / 實際分類 / band / 邊界 / 標籤 / 牆（文件編輯時變）
+  - `interaction` —— 選取 / 拖曳框 / 幽靈切線 / 端點把手 / 高亮（每幀變，但便宜）
+- `MapRenderer.setScene` 比對前後 scene，**只重畫真正變動的圖層**。選取或拖曳
+  框選只碰 `interaction`，所以即使地圖很複雜也順。
+- pan/zoom 期間只改容器的 CSS `transform`，停手約 110ms 後才重新光柵化。
 - 所有重繪透過 `render/scheduler.ts` 的 rAF 批次，元件不直接呼叫 draw。
+- **只有 `fit()`（全覽鈕）與 `frameRegion()`（點清單項目聚焦）會改變縮放**。
+  視窗 resize 用 `resize()` 保留視角。共用繪圖基元在 `render/primitives.ts`。
 
 ## 狀態與持久化
 

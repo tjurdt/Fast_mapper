@@ -24,6 +24,7 @@ import {
   addPlanLayer,
   addWall,
   assignCells,
+  copySelection,
   cycleCutSide,
   deleteCategory,
   deleteCut,
@@ -278,6 +279,29 @@ export function moveSelectionBy(dir: MoveDir): { ok: boolean; reason?: string } 
   let result: MoveResult = { ok: false };
   editDoc((doc) => {
     result = moveSelection(doc, keys, dir);
+    return result.ok ? doc : undefined;
+  });
+  if (result.ok && result.keys) selection.value = new Set(result.keys);
+  return { ok: result.ok, ...(result.reason ? { reason: result.reason } : {}) };
+}
+
+const DELTA: Record<MoveDir, [number, number]> = {
+  up: [-1, 0],
+  down: [1, 0],
+  left: [0, -1],
+  right: [0, 1],
+};
+
+/** 把選取的實際標記複製到某方向第 n 格處。 */
+export function copySelectionBy(dir: MoveDir, distance: number): { ok: boolean; reason?: string } {
+  const p = project.value;
+  const n = Math.max(1, Math.round(distance));
+  if (!p || !selection.value.size) return { ok: false, reason: "沒有選取" };
+  const [ur, uc] = DELTA[dir];
+  const keys = [...selection.value];
+  let result: MoveResult = { ok: false };
+  editDoc((doc) => {
+    result = copySelection(doc, keys, ur * n, uc * n);
     return result.ok ? doc : undefined;
   });
   if (result.ok && result.keys) selection.value = new Set(result.keys);

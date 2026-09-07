@@ -4,20 +4,20 @@ import { tv } from "./vocab";
 import * as store from "../store";
 import { toolById } from "../interaction";
 import type { MessageKey } from "../i18n";
-import { CycleButton, LegendIcon, MovePad } from "./widgets";
+import { CycleButton } from "./widgets";
 
 // ---- 地圖右上角縮放堆疊 ----
 
 export function ZoomStack({ onZoom, onFit }: { onZoom: (f: number) => void; onFit: () => void }) {
   return (
     <div class="zoomstack">
-      <button type="button" aria-label={t("zoom.in")} onClick={() => onZoom(1.5)}>
+      <button type="button" aria-label={t("zoom.in")} onClick={() => onZoom(1.6)}>
         ＋
       </button>
-      <button type="button" aria-label={t("zoom.out")} onClick={() => onZoom(1 / 1.5)}>
+      <button type="button" aria-label={t("zoom.out")} onClick={() => onZoom(1 / 1.6)}>
         −
       </button>
-      <button type="button" aria-label={t("zoom.fit")} onClick={onFit}>
+      <button type="button" aria-label={t("zoom.fit")} title={t("zoom.fit")} onClick={onFit}>
         ⤢
       </button>
     </div>
@@ -32,27 +32,28 @@ export function MapHint() {
   return <div class="maphint">{t(tool.hintKey as MessageKey)}</div>;
 }
 
-// ---- 地圖右下角圖例 FAB（懸浮開關）----
+// ---- 地圖下方懸浮動作列 ----
 
-export function LegendFab({ onToggle, open }: { onToggle: () => void; open: boolean }) {
-  return (
-    <button type="button" class={open ? "legendfab on" : "legendfab"} onClick={onToggle} aria-expanded={open}>
-      <LegendIcon size={17} />
-      {t("legend.title")}
-    </button>
-  );
-}
+const MOVE_DIRS = [
+  { dir: "up", label: "↑" },
+  { dir: "down", label: "↓" },
+  { dir: "left", label: "←" },
+  { dir: "right", label: "→" },
+] as const;
 
-// ---- 地圖下方懸浮動作列（選取 / 切線 / 筆刷）----
-
-export function ActionBar({ onAssign }: { onAssign: () => void }) {
-  const [movePad, setMovePad] = useState(false);
+export function ActionBar({ onAssign, onCopy }: { onAssign: () => void; onCopy: () => void }) {
+  const [moveMode, setMoveMode] = useState(false);
   const p = store.project.value;
   const cut = store.scene.value?.editingCut ?? null;
   const activeFeature = store.activeFeatureId.value
     ? p?.doc.features.find((f) => f.id === store.activeFeatureId.value)
     : null;
   const selCount = store.selection.value.size;
+
+  const move = (dir: "up" | "down" | "left" | "right") => {
+    const r = store.moveSelectionBy(dir);
+    if (!r.ok && r.reason) store.uiEvents.emit("toast", r.reason);
+  };
 
   if (cut) {
     return (
@@ -104,7 +105,7 @@ export function ActionBar({ onAssign }: { onAssign: () => void }) {
       <div class="actionbar targetbar">
         <span class="dot" />
         <b>{activeFeature.name}</b>
-        <span class="hint grow">{tv("paint.hint")}</span>
+        <span class="hint">{tv("paint.hint")}</span>
         <button class="go" onClick={() => store.setActiveFeature(null)}>
           {t("common.done")}
         </button>
@@ -114,33 +115,38 @@ export function ActionBar({ onAssign }: { onAssign: () => void }) {
 
   if (selCount === 0) return null;
 
-  return (
-    <div class="actionbar-wrap">
-      {movePad && (
-        <div class="movepad-float">
-          <MovePad
-            onMove={(dir) => {
-              const r = store.moveSelectionBy(dir);
-              if (!r.ok && r.reason) store.uiEvents.emit("toast", r.reason);
-            }}
-          />
-        </div>
-      )}
+  if (moveMode) {
+    return (
       <div class="actionbar">
-        <span class="count">{t("sel.count", { n: selCount })}</span>
-        <button class="assign" onClick={onAssign}>
-          {tv("sel.assign")}
+        {MOVE_DIRS.map((m) => (
+          <button key={m.dir} class="dirbtn" aria-label={m.dir} onClick={() => move(m.dir)}>
+            {m.label}
+          </button>
+        ))}
+        <button class="assign" onClick={onCopy}>
+          {t("sel.copy")}
         </button>
-        <button class={movePad ? "move on" : "move"} onClick={() => setMovePad(!movePad)}>
-          {t("sel.move")}
-        </button>
-        <button class="danger" onClick={() => store.eraseSelection()}>
-          {t("sel.erase")}
-        </button>
-        <button class="go" onClick={() => store.clearSelection()}>
-          {t("sel.done")}
+        <button class="go" onClick={() => setMoveMode(false)}>
+          {t("common.back")}
         </button>
       </div>
+    );
+  }
+
+  return (
+    <div class="actionbar">
+      <button class="assign" onClick={onAssign}>
+        {t("sel.edit")}
+      </button>
+      <button class="neutral" onClick={() => setMoveMode(true)}>
+        {t("sel.move")}
+      </button>
+      <button class="danger" onClick={() => store.eraseSelection()}>
+        {t("sel.erase")}
+      </button>
+      <button class="go" onClick={() => store.clearSelection()}>
+        {t("sel.done")}
+      </button>
     </div>
   );
 }

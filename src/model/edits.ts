@@ -203,6 +203,39 @@ export function moveSelection(doc: MapDoc, keys: CellKey[], dir: MoveDir): MoveR
   return { ok: true, keys: keys.map((k) => targets.get(k)!) };
 }
 
+/**
+ * 把選取格的實際標記複製到 (dr, dc) 位移處（來源保留，覆蓋目的地）。
+ * legacy 沒有；沿用 moveSelection 的規則（不含 band、不越界）。
+ */
+export function copySelection(doc: MapDoc, keys: CellKey[], dr: number, dc: number): MoveResult {
+  if (!keys.length) return { ok: false, reason: "沒有選取" };
+  for (const k of keys) if (isBandKey(k)) return { ok: false, reason: "對齊網格的格子不支援複製" };
+  const geo = new MapGeometry(doc);
+  const dest: CellKey[] = [];
+  for (const k of keys) {
+    const [r, c] = keyRC(k);
+    const nr = r + dr;
+    const nc = c + dc;
+    if (nr < 0 || nr >= geo.gridH || nc < 0 || nc >= geo.gridW)
+      return { ok: false, reason: "已到達網格邊界" };
+    dest.push(`${nr}_${nc}`);
+  }
+  let copied = 0;
+  keys.forEach((k, i) => {
+    const src = doc.cells[k];
+    if (!src || (!src.cat && !src.feature)) return;
+    const target: Cell = { ...(doc.cells[dest[i]!] ?? {}) };
+    if (src.cat) target.cat = src.cat;
+    if (src.feature) target.feature = src.feature;
+    if (src.poly) target.poly = src.poly;
+    else delete target.poly;
+    doc.cells[dest[i]!] = target;
+    copied++;
+  });
+  if (!copied) return { ok: false, reason: "所選區域沒有可複製的實際標記" };
+  return { ok: true, keys: dest };
+}
+
 // ---- 命名區域 CRUD ----
 
 export function renameFeature(doc: MapDoc, id: string, name: string): MapDoc {

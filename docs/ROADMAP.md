@@ -207,6 +207,25 @@
 - 編號演算法確認與 legacy `recompute` 完全一致（未改動）
 - `tests/` —— 92 個測試（+1）
 
+## Phase 13 — 對話框放大 + 物件框選 group + 檢視聯動清單 + 暖色主題 ✅
+
+- **對話框加寬**（`min(38rem…)`）＋ AssignSheet 搜尋結果改成**行內展開**（不再被
+  對話框下界切掉）；`.dialog-body` 加 `min-height`
+- **手機動作列再壓縮**：按鈕左右內距縮小；`↑↓←→` 併成**一個圓角框**、箭頭間以
+  細線分隔（`.actionbar .dpad` segmented），線條 / 選取模式一列放得下
+- **檢視工具聯動清單**：點店家 → 右側自動切到「清單」分頁並只顯示該店家
+  （手機順便展開面板）；點空白 / 切換工具 → 清除並收回（`store.listReveal`
+  - `panel-open`/`panel-close` 事件）
+- **「選取」模式框選以物件為單位**：矩形只要碰到店家任一格或牆線段，整個物件
+  （連同 group）就被選。**牆＋斜格＋斜格上的店家視為一 group**，一起選 / 移動 /
+  複製 / 刪除（`store.expandObjectGroup` 定點展開；`geo.cutsInRect` 改線段相交、
+  新增 `geo.featuresInRect` / `geo.featuresOnCut`；`poly.ts` 匯出 `segCrossesRect`）
+- **暖色系典雅主題**：`:root` 全面改暖色（奶油 / 赤陶 / 濃咖啡）；新增
+  `--on-ink` / `--emph` token，修掉寫死的亮色（頁首、maphint、toast、cyclebtn、
+  targetbar、legendicon）；暗色模式一併改暖色深棕、文字轉亮。地圖底色 / 格線
+  也改暖灰
+- `tests/` —— 95 個測試（+3）
+
 ## 驗證清單
 
 - [ ] 舊 `grid-market-v4` localStorage 內容 → 自動匯入為「東港華僑市場」專案，

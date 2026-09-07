@@ -12,29 +12,39 @@ type Tab = "list" | "legend" | "manage";
 export function SidePanel({ onClosePanel }: { onClosePanel: () => void }) {
   const [tab, setTab] = useState<Tab>("list");
   const p = store.project.value;
+  // 檢視工具點到店家 → 強制切到清單分頁
+  const reveal = store.listReveal.value;
+  const active: Tab = reveal ? "list" : tab;
   if (!p) return null;
 
   return (
     <aside class="sidepanel">
       <div class="sp-head">
-        <button class={tab === "list" ? "tab on" : "tab"} onClick={() => setTab("list")}>
+        <button class={active === "list" ? "tab on" : "tab"} onClick={() => setTab("list")}>
           <span class="tab-ic">▤</span>
           {tv("list.title")}
         </button>
-        <button class={tab === "legend" ? "tab on" : "tab"} onClick={() => setTab("legend")}>
+        <button class={active === "legend" ? "tab on" : "tab"} onClick={() => setTab("legend")}>
           <LegendIcon size={13} />
           {t("legend.title")}
         </button>
-        <button class={tab === "manage" ? "tab on" : "tab"} onClick={() => setTab("manage")}>
+        <button class={active === "manage" ? "tab on" : "tab"} onClick={() => setTab("manage")}>
           <span class="tab-ic">⚙</span>
           {t("legend.manage")}
         </button>
         <span class="grow" />
-        <button class="icon sp-done" aria-label={t("common.close")} onClick={onClosePanel}>
+        <button
+          class="icon sp-done"
+          aria-label={t("common.close")}
+          onClick={() => {
+            store.revealFeatureInList(null);
+            onClosePanel();
+          }}
+        >
           ✕
         </button>
       </div>
-      {tab === "list" ? <FeatureList /> : tab === "legend" ? <Legend /> : <ManageCategories />}
+      {active === "list" ? <FeatureList /> : active === "legend" ? <Legend /> : <ManageCategories />}
     </aside>
   );
 }
@@ -43,10 +53,11 @@ function FeatureList() {
   const p = store.project.value!;
   const [q, setQ] = useState("");
   const numbers = store.numbers.value;
+  const reveal = store.listReveal.value;
   const catColor = new Map(p.doc.categories.map((c) => [c.id, c.color]));
   const rows = p.doc.features
     .map((f) => ({ f, n: numbers[f.id] }))
-    .filter(({ f, n }) => !q || f.name.includes(q) || String(n ?? "") === q)
+    .filter(({ f, n }) => (reveal ? f.id === reveal : !q || f.name.includes(q) || String(n ?? "") === q))
     .sort((a, b) => (a.n ?? 1e9) - (b.n ?? 1e9));
 
   if (!p.doc.features.length) return <p class="sp-empty">{tv("list.empty")}</p>;
@@ -59,13 +70,19 @@ function FeatureList() {
 
   return (
     <div class="sp-body">
-      <input
-        class="field"
-        type="search"
-        placeholder={t("list.search")}
-        value={q}
-        onInput={(e) => setQ((e.target as HTMLInputElement).value)}
-      />
+      {reveal ? (
+        <button class="reveal-clear" onClick={() => store.revealFeatureInList(null)}>
+          {t("list.showingOne")} <span>✕</span>
+        </button>
+      ) : (
+        <input
+          class="field"
+          type="search"
+          placeholder={t("list.search")}
+          value={q}
+          onInput={(e) => setQ((e.target as HTMLInputElement).value)}
+        />
+      )}
       <ul class="feat-list">
         {rows.map(({ f, n }) => {
           const fac = facilityById(f.facility);

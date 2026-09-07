@@ -11,7 +11,7 @@ import type { Cell, CellKey, Cut, MapDoc, Point } from "./types";
 import { bandKey, gridKey, isBandKey, keyRC, parseBandKey } from "./keys";
 import { cellHidden, cellShape, cellSideIntervals } from "./cells";
 import { bandLocate, bandOuter, bandQuad, computeBandCover, cutGeom, type CutGeom } from "./bands";
-import { clamp, clipPolyToRect, pointInPoly, polyArea, subtractIntervals } from "./poly";
+import { clamp, clipPolyToRect, pointInPoly, polyArea, segCrossesRect, subtractIntervals } from "./poly";
 
 const SQUARE: Point[] = [
   [0, 0],
@@ -399,15 +399,61 @@ export class MapGeometry {
     return da <= db ? "a" : "b";
   }
 
-  /** 端點落在影像矩形內的切線 id。 */
+  /** 線段（部分）落在影像矩形內的切線 id。 */
   cutsInRect(x0: number, y0: number, x1: number, y1: number): string[] {
-    const inside = (x: number, y: number) => x >= x0 && x <= x1 && y >= y0 && y <= y1;
     return this.doc.cuts
       .filter((c) => {
         const g = this.geomFor(c);
-        return inside(g.ax, g.ay) || inside(g.bx, g.by);
+        return segCrossesRect(g.ax, g.ay, g.bx, g.by, x0, y0, x1, y1);
       })
       .map((c) => c.id);
+  }
+
+  /** 只要任一可見格與影像矩形重疊，就算命中的命名區域 id（以物件為單位框選用）。 */
+  featuresInRect(x0: number, y0: number, x1: number, y1: number): string[] {
+    const hit = new Set<string>();
+    const c0 = clamp(Math.floor(x0 / this.cw), 0, this.gridW - 1);
+    const c1 = clamp(Math.floor(x1 / this.cw), 0, this.gridW - 1);
+    const r0 = clamp(Math.floor(y0 / this.ch), 0, this.gridH - 1);
+    const r1 = clamp(Math.floor(y1 / this.ch), 0, this.gridH - 1);
+    for (let r = r0; r <= r1; r++) {
+      for (let c = c0; c <= c1; c++) {
+        const k = gridKey(r, c);
+        const f = this.doc.cells[k]?.feature;
+        if (f && !this.cellCovered(k) && !cellHidden(this.doc.cells[k]!)) hit.add(f);
+      }
+    }
+    for (const cut of this.doc.cuts) {
+      if (!cut.depth) continue;
+      const g = this.geomFor(cut);
+      for (let i = 0; i < g.k; i++) {
+        for (let j = g.jMin; j <= g.jMax; j++) {
+          const bk = bandKey(cut.id, i, j);
+          const f = this.doc.cells[bk]?.feature;
+          if (!f) continue;
+          const q = bandQuad(g, i, j);
+          const bx0 = Math.min(q[0]![0], q[1]![0], q[2]![0], q[3]![0]);
+          const bx1 = Math.max(q[0]![0], q[1]![0], q[2]![0], q[3]![0]);
+          const by0 = Math.min(q[0]![1], q[1]![1], q[2]![1], q[3]![1]);
+          const by1 = Math.max(q[0]![1], q[1]![1], q[2]![1], q[3]![1]);
+          if (bx1 >= x0 && bx0 <= x1 && by1 >= y0 && by0 <= y1) hit.add(f);
+        }
+      }
+    }
+    return [...hit];
+  }
+
+  /** 某條切線的斜格上有格子的命名區域 id。 */
+  featuresOnCut(cutId: string): string[] {
+    const hit = new Set<string>();
+    const prefix = "B" + cutId + "_";
+    for (const k in this.doc.cells) {
+      if (k.startsWith(prefix)) {
+        const f = this.doc.cells[k]!.feature;
+        if (f) hit.add(f);
+      }
+    }
+    return [...hit];
   }
 
   /** 靠近某條切線的 cut id（tol 為影像單位容差）；沒有則 null。 */

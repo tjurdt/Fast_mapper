@@ -21,13 +21,13 @@ export const objSelectTool: Tool = {
     if (ctx.pasteMode) return; // 貼上流程：只記錨點，不動選取
     const nearCut = ctx.geo.cutNear(p.img.x, p.img.y, ctx.hitTolerance());
     if (nearCut) {
-      ctx.actions.toggleCutSelected(nearCut);
+      ctx.actions.pickObjectGroup({ cutId: nearCut }, true, true);
       return;
     }
     const feat =
       ctx.geo.regularFeatureAtPoint(p.img.x, p.img.y) ?? ctx.geo.bandFeatureAtPoint(p.img.x, p.img.y);
     if (feat) {
-      ctx.actions.selectWholeFeature(feat, true);
+      ctx.actions.pickObjectGroup({ featureId: feat }, true, true);
       return;
     }
     ctx.actions.clearSelection();

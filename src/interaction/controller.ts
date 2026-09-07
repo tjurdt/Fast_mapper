@@ -108,6 +108,7 @@ export class InteractionController {
     clearSelection: () => store.clearSelection(),
     eraseSelection: () => store.eraseSelection(),
     inspectFeature: (id) => store.inspectFeature(id),
+    revealInList: (id) => store.revealFeatureInList(id),
     addWall: (seg) => store.addWallSegment(seg),
     beginEditCut: (id) => store.beginEditCut(id),
     moveCutEndpoint: (id, end, x, y) => store.moveCutEndpointTo(id, end, x, y),
@@ -115,6 +116,7 @@ export class InteractionController {
     focusFeature: (id) => store.uiEvents.emit("focus-feature", id),
     toggleCutSelected: (id) => store.toggleCutSelected(id),
     selectWholeFeature: (id, add) => store.selectWholeFeature(id, add),
+    pickObjectGroup: (seed, add, toggle) => store.pickObjectGroup(seed, add, toggle),
     objSelectRect: (rect, add) => store.objSelectRect(rect, add),
     setPasteAnchor: (cell) => {
       if (cell.charCodeAt(0) === 66) return; // band 格不當貼上錨點

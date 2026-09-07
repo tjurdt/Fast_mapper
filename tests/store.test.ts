@@ -100,6 +100,29 @@ describe("store bootstrap", () => {
     expect(store.numbers.value).toEqual({ f1: 1, f2: 2 });
   });
 
+  it("pickObjectGroup：點店家會連同其斜格所屬的牆一起選（group）", async () => {
+    delete (globalThis as Record<string, unknown>).localStorage;
+    store._setAdapterForTests(new MemoryAdapter());
+    await store.createFromTemplate("blank-grid");
+    const cat = store.project.value!.doc.categories[0]!.id;
+    store.editDoc((doc) => {
+      doc.cuts.push({ id: "w1", ax: 1, ay: 4, bx: 9, by: 4, side: 1, depth: 1, wall: true });
+      doc.features.push({ id: "fA", name: "跨牆店", category: cat });
+      doc.cells["2_2"] = { cat, feature: "fA" }; // 一般格
+      doc.cells["Bw1_0_0"] = { cat, feature: "fA" }; // 斜格
+      return doc;
+    });
+    store.pickObjectGroup({ featureId: "fA" }, false, false);
+    expect([...store.selection.value]).toContain("2_2");
+    expect([...store.selectedCutIds.value]).toContain("w1");
+
+    // 反向：點牆 → 也把牆上的店家一般格帶進來
+    store.clearSelection();
+    store.pickObjectGroup({ cutId: "w1" }, false, false);
+    expect([...store.selectedCutIds.value]).toContain("w1");
+    expect([...store.selection.value]).toContain("2_2");
+  });
+
   it("selectionOverlapMarks 找出選取重疊的既有區域 / 分類", async () => {
     delete (globalThis as Record<string, unknown>).localStorage;
     store._setAdapterForTests(new MemoryAdapter());

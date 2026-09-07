@@ -86,7 +86,7 @@ export function drawGridLines(
   ctx.save();
   if (clipBands) clipOutsideQuads(ctx, geo.bandFootprintQuads(), dims.imgW, dims.imgH);
   ctx.lineWidth = Math.max(0.4, dims.cw * 0.04);
-  ctx.strokeStyle = "rgba(20,50,55,.13)";
+  ctx.strokeStyle = "rgba(70,50,32,.14)";
   ctx.beginPath();
   for (let c = 0; c <= dims.gridW; c++) {
     ctx.moveTo(c * dims.cw, 0);
@@ -104,7 +104,7 @@ export function drawGridLines(
 export function drawBandGridLines(ctx: CanvasRenderingContext2D, doc: MapDoc, dims: SceneDims): void {
   ctx.save();
   ctx.lineWidth = Math.max(0.4, dims.cw * 0.04);
-  ctx.strokeStyle = "rgba(20,50,55,.16)";
+  ctx.strokeStyle = "rgba(70,50,32,.17)";
   for (const cut of doc.cuts) {
     if (!cut.depth) continue;
     const g = cutGeom(cut, dims.cw, dims.ch);
@@ -128,7 +128,7 @@ export function drawBandGridLines(ctx: CanvasRenderingContext2D, doc: MapDoc, di
 
 /** 命名區域外框。 */
 export function drawFeatureBorders(ctx: CanvasRenderingContext2D, geo: MapGeometry, dims: SceneDims): void {
-  ctx.strokeStyle = "rgba(20,45,50,.55)";
+  ctx.strokeStyle = "rgba(60,42,28,.55)";
   ctx.lineWidth = Math.max(0.8, dims.cw * 0.12);
   ctx.lineCap = "round";
   ctx.beginPath();
@@ -162,7 +162,7 @@ export function drawWallLines(
     } else if (ghost) {
       ctx.setLineDash([dims.cw * 0.7, dims.cw * 0.5]);
       ctx.lineCap = "butt";
-      ctx.strokeStyle = "rgba(20,50,55,.5)";
+      ctx.strokeStyle = "rgba(70,50,32,.5)";
       ctx.lineWidth = Math.max(0.8, dims.cw * 0.14);
     } else {
       continue;

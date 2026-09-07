@@ -18,7 +18,7 @@ import type { Scene, SceneDims } from "./scene";
 
 /** base：規劃分區底色（底圖圖片由 renderer 另外疊上）。 */
 export function drawBaseLayer(ctx: CanvasRenderingContext2D, scene: Scene, dims: SceneDims): void {
-  ctx.fillStyle = "#f5f7f7";
+  ctx.fillStyle = "#f7f2e8"; // 暖色系底色
   ctx.fillRect(0, 0, dims.imgW, dims.imgH);
   drawPlanFill(ctx, scene.doc, dims, scene.view.view === "plan" ? 0.95 : 0.3);
 }

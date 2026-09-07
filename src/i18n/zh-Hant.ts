@@ -107,6 +107,7 @@ export const zhHant = {
   "list.title": "{feature}清單",
   "list.empty": "尚無{feature}。框選格子後指定分類即可建立。",
   "list.search": "搜尋編號或名稱",
+  "list.showingOne": "只顯示點選的店家",
   "list.edit": "編輯",
   "list.brush": "設為筆刷目標",
   "list.rename": "{feature}名稱",

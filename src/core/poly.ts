@@ -75,6 +75,40 @@ export function pointInPoly(px: number, py: number, poly: Polygon): boolean {
   return inside;
 }
 
+/** Liang–Barsky：線段 (ax,ay)-(bx,by) 是否穿過（或碰到）矩形 [x0,y0,x1,y1]。 */
+export function segCrossesRect(
+  ax: number,
+  ay: number,
+  bx: number,
+  by: number,
+  x0: number,
+  y0: number,
+  x1: number,
+  y1: number,
+): boolean {
+  let t0 = 0;
+  let t1 = 1;
+  const dx = bx - ax;
+  const dy = by - ay;
+  const p = [-dx, dx, -dy, dy];
+  const q = [ax - x0, x1 - ax, ay - y0, y1 - ay];
+  for (let i = 0; i < 4; i++) {
+    if (Math.abs(p[i]!) < 1e-12) {
+      if (q[i]! < 0) return false;
+    } else {
+      const t = q[i]! / p[i]!;
+      if (p[i]! < 0) {
+        if (t > t1) return false;
+        if (t > t0) t0 = t;
+      } else {
+        if (t < t0) return false;
+        if (t < t1) t1 = t;
+      }
+    }
+  }
+  return t1 - t0 > -1e-9;
+}
+
 /** 點到線段距離。 */
 export function pointSegDist(px: number, py: number, ax: number, ay: number, bx: number, by: number): number {
   const dx = bx - ax;

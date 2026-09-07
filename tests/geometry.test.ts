@@ -113,3 +113,29 @@ describe("MapGeometry — 連通分量", () => {
     expect(geo.featureLabelAnchors("A").length).toBe(2);
   });
 });
+
+describe("MapGeometry — 框選（物件為單位）", () => {
+  const geo = new MapGeometry(
+    makeDoc({
+      grid: { w: 20, h: 20, cellPx: 10 },
+      cells: {
+        "2_2": { cat: "c1", feature: "shopA" },
+        "2_3": { cat: "c1", feature: "shopA" },
+        "10_10": { cat: "c1", feature: "shopB" },
+      },
+      cuts: [{ id: "w1", ax: 1, ay: 5, bx: 8, by: 5, side: 1, depth: 0, wall: true }],
+    }),
+  );
+
+  it("cutsInRect：矩形只碰到線段中段也算命中", () => {
+    // 影像座標：牆在 y=50，x 10..80。矩形 (40,40)-(60,60) 只蓋中段
+    expect(geo.cutsInRect(40, 40, 60, 60)).toEqual(["w1"]);
+    expect(geo.cutsInRect(200, 200, 250, 250)).toEqual([]);
+  });
+
+  it("featuresInRect：矩形碰到任一格就整個店家命中", () => {
+    // shopA 格在 (20,20)-(40,30) 附近；矩形只切到一角
+    expect(geo.featuresInRect(35, 25, 45, 35)).toContain("shopA");
+    expect(geo.featuresInRect(35, 25, 45, 35)).not.toContain("shopB");
+  });
+});

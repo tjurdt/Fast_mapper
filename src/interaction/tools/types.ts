@@ -41,15 +41,18 @@ export interface ToolActions {
   clearSelection(): void;
   eraseSelection(): void;
   inspectFeature(id: string | null): void;
+  /** 檢視工具：在右側清單分頁篩出該店家（null = 清除並收回面板）。 */
+  revealInList(id: string | null): void;
   addWall(seg: { ax: number; ay: number; bx: number; by: number }): string;
   beginEditCut(cutId: string | null): void;
   moveCutEndpoint(cutId: string, end: "a" | "b", x: number, y: number): void;
   /** 封閉區洪水框選；失敗回傳原因字串。 */
   selectEnclosed(x: number, y: number): { ok: boolean; reason?: string };
   focusFeature(id: string): void;
-  /** 「選取」模式：切換牆的選取狀態 / 選整個命名區域 / 框選物件 / 記錄貼上錨點。 */
+  /** 「選取」模式：以物件為單位選取 group / 框選物件 / 記錄貼上錨點。 */
   toggleCutSelected(cutId: string): void;
   selectWholeFeature(id: string, additive: boolean): void;
+  pickObjectGroup(seed: { cutId?: string; featureId?: string }, additive: boolean, toggle: boolean): void;
   objSelectRect(rect: ImgRect, additive: boolean): void;
   setPasteAnchor(cell: CellKey): void;
   toast(message: string): void;

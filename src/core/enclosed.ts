@@ -7,7 +7,7 @@ import type { CellKey, CellPoly, Point } from "./types";
 import type { MapGeometry } from "./geometry";
 import { bandKey, gridKey, keyRC } from "./keys";
 import { bandQuad } from "./bands";
-import { clamp, clipPolyHalfPlane, polyArea } from "./poly";
+import { clamp, clipPolyHalfPlane, polyArea, segCrossesRect } from "./poly";
 
 const FILL_SUB = 8; // 每格細分數（越大越精細、越慢）
 
@@ -15,40 +15,6 @@ export interface EnclosedRegion {
   keys: CellKey[];
   /** key → 裁切後的局部多邊形（0..1）；null = 整格。 */
   shapes: Map<CellKey, CellPoly | null>;
-}
-
-/** Liang–Barsky：線段是否穿過此格矩形。 */
-function segCrossesRect(
-  ax: number,
-  ay: number,
-  bx: number,
-  by: number,
-  x0: number,
-  y0: number,
-  x1: number,
-  y1: number,
-): boolean {
-  let t0 = 0;
-  let t1 = 1;
-  const dx = bx - ax;
-  const dy = by - ay;
-  const p = [-dx, dx, -dy, dy];
-  const q = [ax - x0, x1 - ax, ay - y0, y1 - ay];
-  for (let i = 0; i < 4; i++) {
-    if (Math.abs(p[i]!) < 1e-12) {
-      if (q[i]! < 0) return false;
-    } else {
-      const t = q[i]! / p[i]!;
-      if (p[i]! < 0) {
-        if (t > t1) return false;
-        if (t > t0) t0 = t;
-      } else {
-        if (t < t0) return false;
-        if (t < t1) t1 = t;
-      }
-    }
-  }
-  return t1 - t0 > 1e-9;
 }
 
 interface Seg {

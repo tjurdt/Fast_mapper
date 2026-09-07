@@ -1,4 +1,7 @@
-/** 檢視工具：點格看它屬於哪個命名區域（清單也會標記）；拖曳 = 平移。 */
+/**
+ * 檢視工具：點店家 → 右側自動切到「清單」分頁並篩出該店家（手機會順便展開面板）；
+ * 點空白處 / 切換工具會把面板收回。
+ */
 import type { Tool } from "./types";
 
 export const inspectTool: Tool = {
@@ -9,8 +12,7 @@ export const inspectTool: Tool = {
   onTap(ctx, p) {
     const id =
       ctx.geo.regularFeatureAtPoint(p.img.x, p.img.y) ?? ctx.geo.bandFeatureAtPoint(p.img.x, p.img.y);
-    ctx.actions.inspectFeature(id ?? null);
-    if (id) ctx.actions.focusFeature(id);
+    ctx.actions.revealInList(id ?? null);
   },
 
   onLongPress(ctx, p) {
@@ -18,6 +20,6 @@ export const inspectTool: Tool = {
   },
 
   onDeactivate(ctx) {
-    ctx.actions.inspectFeature(null);
+    ctx.actions.revealInList(null);
   },
 };

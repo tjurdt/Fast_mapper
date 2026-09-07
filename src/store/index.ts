@@ -57,7 +57,8 @@ import {
 import type { Scene } from "../render/scene";
 import { exportImage, exportXlsx, downloadFile, type ExportOptions } from "../export";
 
-export { uiEvents } from "./events";
+import { uiEvents } from "./events";
+export { uiEvents };
 
 // ---- signals ----
 
@@ -101,6 +102,10 @@ export function setTool(id: string): void {
   ghostCut.value = null;
   activeFeatureId.value = null;
   inspectedFeature.value = null;
+  if (listReveal.value !== null) {
+    listReveal.value = null;
+    uiEvents.emit("panel-close");
+  }
 }
 
 /** 只影響渲染、不進歷史的暫時狀態（拖曳框、幽靈切線、正在編輯的切線）。 */
@@ -401,6 +406,14 @@ export function inspectFeature(id: string | null): void {
   inspectedFeature.value = id;
 }
 
+/** 檢視工具點到的店家：右側清單分頁篩出它（並在手機展開面板）；null 清除並收回。 */
+export const listReveal = signal<string | null>(null);
+export function revealFeatureInList(id: string | null): void {
+  listReveal.value = id;
+  inspectedFeature.value = id;
+  uiEvents.emit(id ? "panel-open" : "panel-close");
+}
+
 // ---- 「選取」模式：整體移動 / 複製 / 刪除 / 剪貼簿 ----
 
 function currentObjSelection(): ObjectSelection {
@@ -417,39 +430,104 @@ export function toggleCutSelected(id: string): void {
   selectedCutIds.value = next;
 }
 
-/** 選取整個命名區域的所有格；band 格所屬的牆也一起選。 */
-export function selectWholeFeature(id: string, additive: boolean): void {
+/**
+ * 把種子牆 / 種子命名區域展開成完整「group」：
+ *  - 牆 → 其斜格上的所有店家 → 那些店家的所有格
+ *  - 店家 → 若跨到斜格，連同該斜格所屬的牆
+ * 直到收斂。回傳 { cells（一般格）, cuts }。
+ */
+function expandObjectGroup(
+  seedCuts: Iterable<string>,
+  seedFeatures: Iterable<string>,
+): { cells: Set<CellKey>; cuts: Set<string> } {
   const geo = geometry.value;
-  if (!geo) return;
-  const keys = geo.featureKeys(id);
-  const cells = additive ? new Set(selection.value) : new Set<CellKey>();
-  const cuts = additive ? new Set(selectedCutIds.value) : new Set<string>();
-  for (const k of keys) {
-    if (k.charCodeAt(0) === 66) cuts.add(k.slice(1, k.indexOf("_", 1)));
-    else cells.add(k);
+  const cuts = new Set(seedCuts);
+  const feats = new Set(seedFeatures);
+  const cells = new Set<CellKey>();
+  if (!geo) return { cells, cuts };
+
+  let changed = true;
+  while (changed) {
+    changed = false;
+    for (const cid of [...cuts]) {
+      for (const f of geo.featuresOnCut(cid)) {
+        if (!feats.has(f)) {
+          feats.add(f);
+          changed = true;
+        }
+      }
+    }
+    for (const fid of [...feats]) {
+      for (const k of geo.featureKeys(fid)) {
+        if (k.charCodeAt(0) === 66) {
+          const cid = k.slice(1, k.indexOf("_", 1));
+          if (!cuts.has(cid)) {
+            cuts.add(cid);
+            changed = true;
+          }
+        }
+      }
+    }
   }
+  for (const fid of feats) {
+    for (const k of geo.featureKeys(fid)) if (k.charCodeAt(0) !== 66) cells.add(k);
+  }
+  return { cells, cuts };
+}
+
+/** 點選一個物件（牆或店家）→ 選取整個 group。toggle=true 時再點取消整組。 */
+export function pickObjectGroup(
+  seed: { cutId?: string; featureId?: string },
+  additive: boolean,
+  toggle: boolean,
+): void {
+  const { cells, cuts } = expandObjectGroup(
+    seed.cutId ? [seed.cutId] : [],
+    seed.featureId ? [seed.featureId] : [],
+  );
+  const curCells = new Set(selection.value);
+  const curCuts = new Set(selectedCutIds.value);
+  const alreadyIn =
+    (seed.cutId && curCuts.has(seed.cutId)) || (seed.featureId && [...cells].some((k) => curCells.has(k)));
+
   batch(() => {
-    selection.value = cells;
-    selectedCutIds.value = cuts;
+    if (toggle && alreadyIn) {
+      for (const k of cells) curCells.delete(k);
+      for (const c of cuts) curCuts.delete(c);
+      selection.value = curCells;
+      selectedCutIds.value = curCuts;
+      return;
+    }
+    const nextCells = additive ? curCells : new Set<CellKey>();
+    const nextCuts = additive ? curCuts : new Set<string>();
+    for (const k of cells) nextCells.add(k);
+    for (const c of cuts) nextCuts.add(c);
+    selection.value = nextCells;
+    selectedCutIds.value = nextCuts;
   });
 }
 
-/** 框選：矩形內有實際標記的格 + 端點在矩形內的牆。 */
+/** 選取整個命名區域 group（供舊呼叫端 / 清單使用）。 */
+export function selectWholeFeature(id: string, additive: boolean): void {
+  pickObjectGroup({ featureId: id }, additive, false);
+}
+
+/**
+ * 以「物件」為單位框選：矩形只要碰到店家的任一格或牆的線段，整個物件（連同 group）就被選。
+ */
 export function objSelectRect(rect: readonly [number, number, number, number], additive: boolean): void {
   const geo = geometry.value;
-  const p = project.value;
-  if (!geo || !p) return;
-  const cellKeys = geo
-    .cellsInRect(rect[0], rect[1], rect[2], rect[3], p.view.view === "actual")
-    .filter((k) => geo.cell(k)?.cat || geo.cell(k)?.feature);
-  const cutIds = geo.cutsInRect(rect[0], rect[1], rect[2], rect[3]);
+  if (!geo) return;
+  const feats = geo.featuresInRect(rect[0], rect[1], rect[2], rect[3]);
+  const seedCuts = geo.cutsInRect(rect[0], rect[1], rect[2], rect[3]);
+  const { cells, cuts } = expandObjectGroup(seedCuts, feats);
   batch(() => {
-    const cells = additive ? new Set(selection.value) : new Set<CellKey>();
-    for (const k of cellKeys) cells.add(k);
-    selection.value = cells;
-    const cuts = additive ? new Set(selectedCutIds.value) : new Set<string>();
-    for (const id of cutIds) cuts.add(id);
-    selectedCutIds.value = cuts;
+    const nextCells = additive ? new Set(selection.value) : new Set<CellKey>();
+    const nextCuts = additive ? new Set(selectedCutIds.value) : new Set<string>();
+    for (const k of cells) nextCells.add(k);
+    for (const c of cuts) nextCuts.add(c);
+    selection.value = nextCells;
+    selectedCutIds.value = nextCuts;
   });
 }
 

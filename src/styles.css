@@ -1,36 +1,58 @@
 :root {
   color-scheme: light dark;
-  --bg: #eef1f0;
-  --panel: #fff;
-  --panel-2: #f4f7f6;
-  --ink: #0e3b43;
-  --accent: #e2603f;
-  --accent-ink: #b5401f;
-  --danger: #c0402a;
-  --text: #1b2a2d;
-  --muted: #61757a;
-  --line: #dbe2e1;
-  --line-strong: #c2cccb;
-  --stage: #e9edec;
-  --shadow: 0 4px 16px rgba(0, 0, 0, 0.16);
+  /* 暖色系典雅配色 —— 亮色 */
+  --bg: #f3ece0;
+  --panel: #fffcf6;
+  --panel-2: #f0e7d7;
+  --ink: #3d322a; /* 深色表面：頁首列、徽章、作用中分頁 */
+  --on-ink: #f6efe1; /* ink 表面上的文字 */
+  --emph: #46382c; /* 強調文字（對話框標題、圖例標頭） */
+  --accent: #c46a43;
+  --accent-ink: #a8532e;
+  --danger: #b24733;
+  --text: #33291f;
+  --muted: #8b7961;
+  --line: #e6dcc9;
+  --line-strong: #d1c2a9;
+  --stage: #ebe1cf;
+  --shadow: 0 4px 16px rgba(74, 54, 38, 0.16);
   --radius: 10px;
 }
 @media (prefers-color-scheme: dark) {
-  :root {
-    --bg: #0f1e1d;
-    --panel: #182f2d;
-    --panel-2: #142826;
-    --ink: #8fe0d6;
-    --accent: #f07a5a;
-    --accent-ink: #f07a5a;
-    --danger: #f0876b;
-    --text: #e7f2f0;
-    --muted: #a2b7b4;
-    --line: #294946;
-    --line-strong: #38625e;
-    --stage: #0b1817;
-    --shadow: 0 4px 18px rgba(0, 0, 0, 0.45);
+  :root:not([data-theme="light"]) {
+    --bg: #1d1712;
+    --panel: #2a221b;
+    --panel-2: #241d16;
+    --ink: #17120d;
+    --on-ink: #f0e6d5;
+    --emph: #ecdcc4;
+    --accent: #d6774d;
+    --accent-ink: #e08a5f;
+    --danger: #d06a52;
+    --text: #efe5d5;
+    --muted: #ac9c85;
+    --line: #3b3128;
+    --line-strong: #554636;
+    --stage: #16110d;
+    --shadow: 0 4px 18px rgba(0, 0, 0, 0.5);
   }
+}
+:root[data-theme="dark"] {
+  --bg: #1d1712;
+  --panel: #2a221b;
+  --panel-2: #241d16;
+  --ink: #17120d;
+  --on-ink: #f0e6d5;
+  --emph: #ecdcc4;
+  --accent: #d6774d;
+  --accent-ink: #e08a5f;
+  --danger: #d06a52;
+  --text: #efe5d5;
+  --muted: #ac9c85;
+  --line: #3b3128;
+  --line-strong: #554636;
+  --stage: #16110d;
+  --shadow: 0 4px 18px rgba(0, 0, 0, 0.5);
 }
 
 * {
@@ -127,9 +149,9 @@ button.danger {
   font-weight: 600;
 }
 .cyclebtn.solid {
-  background: #1c1c1c;
-  color: #fff;
-  border-color: #1c1c1c;
+  background: var(--ink);
+  color: var(--on-ink);
+  border-color: var(--ink);
 }
 
 .field,
@@ -189,7 +211,7 @@ button.danger {
 .hub-head h1 {
   margin: 0;
   font-size: 1.5rem;
-  color: var(--ink);
+  color: var(--emph);
 }
 .hub-list,
 .tpl-list {
@@ -266,13 +288,13 @@ button.danger {
   gap: 0.45rem;
   padding: 0.45rem 0.8rem;
   background: var(--ink);
-  color: #eaf3f3;
+  color: var(--on-ink);
 }
 .topbar .grow {
   flex: 1;
 }
 .topbar button.ghost {
-  color: #eaf3f3;
+  color: var(--on-ink);
   font-size: 1.05rem;
 }
 .topbar button.ghost:hover:not(:disabled) {
@@ -282,7 +304,7 @@ button.danger {
 .proj-name {
   font-weight: 700;
   font-size: 1.05rem;
-  color: #fff;
+  color: var(--on-ink);
   border: 0;
   background: none;
   max-width: 42vw;
@@ -290,10 +312,10 @@ button.danger {
   text-overflow: ellipsis;
 }
 .view-seg {
-  border-color: #2f666e;
+  border-color: rgba(255, 255, 255, 0.24);
 }
 .view-seg button {
-  color: #cfe6e6;
+  color: color-mix(in srgb, var(--on-ink) 72%, transparent);
 }
 .view-seg button.on {
   background: var(--accent);
@@ -361,23 +383,18 @@ button.danger {
   left: 12px;
   top: 12px;
   z-index: 7;
-  background: rgba(255, 255, 255, 0.94);
+  background: var(--panel);
   color: var(--muted);
   border: 1px solid var(--line);
   border-radius: 999px;
   padding: 6px 13px;
   font-size: 13px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.09);
+  box-shadow: var(--shadow);
   pointer-events: none;
   max-width: calc(100% - 90px);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-}
-@media (prefers-color-scheme: dark) {
-  .maphint {
-    background: rgba(24, 47, 45, 0.94);
-  }
 }
 
 .zoomstack {
@@ -409,8 +426,8 @@ button.danger {
   display: inline-block;
   border-radius: 50%;
   flex: 0 0 auto;
-  background: conic-gradient(#ed7d31 0 25%, #70ad47 0 50%, #2e75b6 0 75%, #9966ff 0);
-  border: 2px solid #fff;
+  background: conic-gradient(#c46a43 0 25%, #7d8c4a 0 50%, #4a7a8c 0 75%, #9c6a9c 0);
+  border: 2px solid var(--panel);
   box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.16);
 }
 
@@ -483,8 +500,22 @@ button.danger {
 }
 .actionbar .dpad {
   display: inline-flex;
-  align-items: center;
-  gap: 5px;
+  align-items: stretch;
+  gap: 0;
+  border: 1px solid var(--line-strong);
+  border-radius: 11px;
+  overflow: hidden;
+  background: var(--panel);
+  box-shadow: var(--shadow);
+}
+.actionbar .dpad .dirbtn {
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+  background: none;
+}
+.actionbar .dpad .dirbtn + .dirbtn {
+  border-left: 1px solid var(--line);
 }
 .actionbar .gridadd {
   display: inline-flex;
@@ -539,9 +570,9 @@ button.danger {
   flex: 1 1 auto;
 }
 .targetbar button.go {
-  background: #fff;
+  background: var(--panel);
   color: var(--accent-ink);
-  border-color: #fff;
+  border-color: var(--panel);
   box-shadow: none;
 }
 
@@ -552,12 +583,12 @@ button.danger {
   bottom: 90px;
   transform: translateX(-50%);
   z-index: 90;
-  background: rgba(18, 36, 40, 0.95);
-  color: #fff;
+  background: var(--ink);
+  color: var(--on-ink);
   padding: 0.6rem 1.05rem;
   border-radius: 999px;
   font-size: 0.92rem;
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
+  box-shadow: var(--shadow);
 }
 
 /* ---- side panel ---- */
@@ -625,6 +656,16 @@ button.danger {
   color: var(--muted);
   padding: 1.2rem;
 }
+.reveal-clear {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  background: var(--accent-ink);
+  color: #fff;
+  border-color: var(--accent-ink);
+  font-weight: 600;
+}
 
 .feat-list {
   list-style: none;
@@ -690,7 +731,7 @@ button.danger {
 .legend h4 {
   margin: 0.5rem 0 0.3rem;
   font-size: 0.95rem;
-  color: var(--ink);
+  color: var(--emph);
 }
 .legend ul {
   list-style: none;
@@ -747,7 +788,7 @@ input.sw {
   padding: 1rem;
 }
 .dialog {
-  width: min(30rem, 100%);
+  width: min(38rem, 100%);
   max-height: 88dvh;
   background: var(--panel);
   border-radius: 16px;
@@ -757,7 +798,10 @@ input.sw {
   overflow: hidden;
 }
 .dialog.wide {
-  width: min(40rem, 100%);
+  width: min(46rem, 100%);
+}
+.dialog-body {
+  min-height: 6rem;
 }
 .dialog-head {
   display: flex;
@@ -767,7 +811,7 @@ input.sw {
   border-bottom: 1px solid var(--line);
 }
 .dialog-head b {
-  color: var(--ink);
+  color: var(--emph);
   font-size: 1.08rem;
 }
 .dialog-body {
@@ -806,27 +850,27 @@ input.sw {
 /* ---- assign：既有區域下拉搜尋 + 重疊沿用 ---- */
 .fieldrow.combo {
   align-items: flex-start;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+.fieldrow.combo > span {
+  align-self: flex-start;
 }
 .combo-box {
   position: relative;
-  flex: 1;
+  width: 100%;
   min-width: 0;
 }
 .combo-box .field {
   width: 100%;
 }
 .combo-list {
-  position: absolute;
-  left: 0;
-  right: 0;
-  top: calc(100% + 4px);
-  z-index: 5;
-  max-height: 15rem;
+  margin-top: 0.4rem;
+  max-height: 13rem;
   overflow: auto;
   background: var(--panel);
   border: 1px solid var(--line-strong);
   border-radius: var(--radius);
-  box-shadow: var(--shadow);
 }
 .combo-list button {
   display: flex;
@@ -969,24 +1013,29 @@ input.sw {
   .actionbar > button {
     box-shadow: var(--shadow);
     border-radius: 10px;
-    padding: 0.55rem 0.85rem;
-    font-size: 0.9rem;
+    padding: 0.5rem 0.6rem;
+    font-size: 0.88rem;
   }
   .actionbar .cyclebtn,
   .actionbar .gridadd {
     box-shadow: var(--shadow);
   }
-  .actionbar .gridadd {
-    padding: 0.3rem 0.45rem 0.3rem 0.6rem;
-    font-size: 0.86rem;
+  .actionbar .cyclebtn {
+    padding: 0.5rem 0.55rem;
+    font-size: 0.84rem;
   }
-  .actionbar .dpad {
-    gap: 3px;
+  .actionbar .gridadd {
+    padding: 0.28rem 0.35rem 0.28rem 0.5rem;
+    font-size: 0.82rem;
+    gap: 0.25rem;
+  }
+  .actionbar .gridadd select {
+    padding: 0.25rem 0.2rem;
   }
   .actionbar .dirbtn {
-    padding: 0.32rem 0.42rem;
-    font-size: 0.85rem;
-    min-width: 1.7rem;
+    padding: 0.34rem 0.44rem;
+    font-size: 0.88rem;
+    min-width: 1.6rem;
   }
   /* 網格 / 貼上：三顆按鈕平均分佈在最下方 */
   .actionbar.simple {

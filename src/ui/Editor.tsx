@@ -43,6 +43,8 @@ export function Editor() {
         setCatsReturn(null);
         setSheet("cats");
       }),
+      uiEvents.on("panel-open", () => setPanelOpen(true)),
+      uiEvents.on("panel-close", () => setPanelOpen(false)),
     ];
     return () => offs.forEach((o) => o());
   }, []);

@@ -53,6 +53,7 @@ export const zhHant = {
   "sel.pasteCancel": "取消複製",
   "sel.pasteHint": "先在地圖點一個格子當貼上位置（左上角），再按「貼上」",
   "sel.pasteReady": "已標記貼上位置・可再點別處調整・按「貼上」完成",
+  "sel.pasteFail": "貼不下（內容超出網格範圍）",
 
   "offset.title": "位移",
   "offset.h": "水平（＋右／−左）",

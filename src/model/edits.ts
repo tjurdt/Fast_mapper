@@ -8,7 +8,7 @@ import type { Cell, CellKey, CellPoly, Cut, Feature, MapDoc } from "../core/type
 import { bandKey, isBandKey, keyRC, parseBandKey } from "../core/keys";
 import { cellHidden } from "../core/cells";
 import { MapGeometry } from "../core/geometry";
-import { bandLocate, cutGeom } from "../core/bands";
+import { cutGeom } from "../core/bands";
 import { clamp } from "../core/poly";
 
 const UNNAMED_PREFIX = "未命名";
@@ -33,6 +33,33 @@ export function nextUnnamedName(doc: MapDoc, categoryId: string): string {
   let n = 1;
   while (doc.features.some((f) => f.name === base + n)) n++;
   return base + n;
+}
+
+/**
+ * 複製 / 貼上內容時，把來源 feature id 換成全新的 id（並在 doc 內建立對應的新 feature），
+ * 讓貼上後的物件與「雙胞胎」完全獨立、不會被連動選取。
+ */
+function makeFeatureRemapper(doc: MapDoc): (srcId: string | undefined) => string | undefined {
+  const map = new Map<string, string>();
+  return (srcId) => {
+    if (!srcId) return undefined;
+    let nid = map.get(srcId);
+    if (nid) return nid;
+    nid = rid("f");
+    map.set(srcId, nid);
+    const src = doc.features.find((f) => f.id === srcId);
+    const base = src ? src.name : "未命名";
+    let name = base + "（複本）";
+    let n = 2;
+    while (doc.features.some((f) => f.name === name)) name = `${base}（複本 ${n++}）`;
+    doc.features.push({
+      id: nid,
+      name,
+      category: src?.category ?? doc.categories[0]?.id ?? "",
+      ...(src?.facility ? { facility: src.facility } : {}),
+    });
+    return nid;
+  };
 }
 
 /** 移除「未命名*且沒有任何格子使用」的 feature（legacy pruneUnusedUnnamedShops）。 */
@@ -333,6 +360,7 @@ export function copyObjects(
       return { ok: false, reason: "已到達網格邊界", cutIds: [], cellKeys: [] };
   }
 
+  const remap = makeFeatureRemapper(doc);
   const newCutIds: string[] = [];
   for (const c of cuts) {
     const nid = rid("k");
@@ -341,7 +369,8 @@ export function copyObjects(
     for (const k in doc.cells) {
       if (!isBandKey(k) || bandCutId(k) !== c.id) continue;
       const rest = k.slice(("B" + c.id).length); // "_i_j"
-      doc.cells["B" + nid + rest] = { ...doc.cells[k]! };
+      const s = doc.cells[k]!;
+      doc.cells["B" + nid + rest] = { ...s, ...(s.feature ? { feature: remap(s.feature) } : {}) };
     }
   }
 
@@ -353,7 +382,7 @@ export function copyObjects(
     if (!src || (!src.cat && !src.feature)) continue;
     const t: Cell = { ...(doc.cells[nk] ?? {}) };
     if (src.cat) t.cat = src.cat;
-    if (src.feature) t.feature = src.feature;
+    if (src.feature) t.feature = remap(src.feature);
     if (src.poly) t.poly = src.poly;
     else delete t.poly;
     doc.cells[nk] = t;
@@ -361,6 +390,7 @@ export function copyObjects(
   }
 
   pruneBandCells(doc);
+  pruneOrphanFeatures(doc);
   return { ok: true, cutIds: newCutIds, cellKeys: newCellKeys };
 }
 
@@ -440,6 +470,22 @@ export function pasteObjects(
   col: number,
 ): { cutIds: string[]; cellKeys: CellKey[] } {
   const geo = new MapGeometry(doc);
+  const remap = makeFeatureRemapper(doc);
+
+  // 內容包圍盒 → 把貼上位置夾在網格內，讓靠邊點也貼得下（至少貼一部分）
+  let maxDr = 0;
+  let maxDc = 0;
+  for (const c of clip.cells) {
+    maxDr = Math.max(maxDr, c.dr);
+    maxDc = Math.max(maxDc, c.dc);
+  }
+  for (const cc of clip.cuts) {
+    maxDr = Math.max(maxDr, Math.ceil(Math.max(cc.cut.ay, cc.cut.by)));
+    maxDc = Math.max(maxDc, Math.ceil(Math.max(cc.cut.ax, cc.cut.bx)));
+  }
+  row = clamp(Math.round(row), 0, Math.max(0, geo.gridH - 1 - maxDr));
+  col = clamp(Math.round(col), 0, Math.max(0, geo.gridW - 1 - maxDc));
+
   const cutIds: string[] = [];
   for (const cc of clip.cuts) {
     const nid = rid("k");
@@ -452,7 +498,12 @@ export function pasteObjects(
       by: cc.cut.by + row,
     });
     cutIds.push(nid);
-    for (const b of cc.bands) doc.cells[`B${nid}_${b.i}_${b.j}`] = { ...b.cell };
+    for (const b of cc.bands) {
+      doc.cells[`B${nid}_${b.i}_${b.j}`] = {
+        ...b.cell,
+        ...(b.cell.feature ? { feature: remap(b.cell.feature) } : {}),
+      };
+    }
   }
   const cellKeys: CellKey[] = [];
   for (const c of clip.cells) {
@@ -462,13 +513,14 @@ export function pasteObjects(
     const k = `${r}_${cc}`;
     const t: Cell = { ...(doc.cells[k] ?? {}) };
     if (c.cat) t.cat = c.cat;
-    if (c.feature) t.feature = c.feature;
+    if (c.feature) t.feature = remap(c.feature);
     if (c.poly) t.poly = c.poly;
     else delete t.poly;
     doc.cells[k] = t;
     cellKeys.push(k);
   }
   pruneBandCells(doc);
+  pruneOrphanFeatures(doc);
   return { cutIds, cellKeys };
 }
 
@@ -646,6 +698,15 @@ export function deleteCut(doc: MapDoc, id: string): MapDoc {
   return doc;
 }
 
+/**
+ * 移動切線端點，並依規則搬移斜格內容：
+ *  - 斜格以「沿切線的第 i 段」索引（i 從 a 端起算）。
+ *  - 移動 b 端：i 不變（内容固定在 a 端），變短時只有 i ≥ 新段數的（靠 b 端）被犧牲。
+ *  - 移動 a 端：把 i 全部平移 (新段數 − 舊段數)，讓內容固定在 b 端；變短時靠 a 端的被犧牲。
+ *  - 長度不變（段數不變）→ i 完全不變、內容原封不動。
+ *  - 拉一圈又拉回原位（commit 只在放手時）→ 段數回到原值 → 完全不變。
+ *  - 拉長 → 多出的段沒有內容。
+ */
 export function moveCutEndpoint(doc: MapDoc, id: string, end: "a" | "b", x: number, y: number): MapDoc {
   const cut = cutById(doc, id);
   if (!cut) return doc;
@@ -654,21 +715,15 @@ export function moveCutEndpoint(doc: MapDoc, id: string, end: "a" | "b", x: numb
   const ch = doc.grid.cellPx;
   const prefix = "B" + id + "_";
 
-  // 移動端點前，先記錄每個斜格「內容」+ 它的世界座標中心（用舊幾何）
-  const carried: { cx: number; cy: number; cell: Cell }[] = [];
+  let carried: { i: number; j: number; cell: Cell }[] | null = null;
+  let oldK = 0;
   if (cut.depth) {
-    const gOld = cutGeom(cut, cw, ch);
+    oldK = cutGeom(cut, cw, ch).k;
+    carried = [];
     for (const k in doc.cells) {
       if (!k.startsWith(prefix)) continue;
       const b = parseBandKey(k);
-      // 舊 band 格中心（沿切線 u = (i+0.5)*step，法向 v = (j+0.5)*U）
-      const u = (b.i + 0.5) * gOld.step;
-      const v = (b.j + 0.5) * gOld.U;
-      carried.push({
-        cx: gOld.ax + gOld.ux * u + gOld.nx * v,
-        cy: gOld.ay + gOld.uy * u + gOld.ny * v,
-        cell: doc.cells[k]!,
-      });
+      carried.push({ i: b.i, j: b.j, cell: doc.cells[k]! });
       delete doc.cells[k];
     }
   }
@@ -681,14 +736,14 @@ export function moveCutEndpoint(doc: MapDoc, id: string, end: "a" | "b", x: numb
     cut.by = y;
   }
 
-  // 移動端點後：把每個斜格內容依世界座標重新定位到新的 band 格
-  // 落在新帶範圍外的（通常在被拉近的那個端點附近）就被犧牲
-  if (cut.depth && carried.length) {
+  if (carried && carried.length) {
     const gNew = cutGeom(cut, cw, ch);
+    const shift = end === "a" ? gNew.k - oldK : 0;
     for (const item of carried) {
-      const hit = bandLocate(gNew, item.cx, item.cy);
-      if (!hit) continue;
-      const nk = bandKey(id, hit.i, hit.j);
+      const ni = item.i + shift;
+      if (ni < 0 || ni >= gNew.k) continue; // 被犧牲的段
+      if (item.j < gNew.jMin || item.j > gNew.jMax) continue;
+      const nk = bandKey(id, ni, item.j);
       doc.cells[nk] = { ...(doc.cells[nk] ?? {}), ...item.cell };
     }
   }

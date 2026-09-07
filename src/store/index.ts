@@ -638,15 +638,17 @@ export function clipboardPaste(): boolean {
   if (!clipboard || !pasteAnchor.value) return false;
   const anchor = pasteAnchor.value;
   let res: { cutIds: string[]; cellKeys: CellKey[] } = { cutIds: [], cellKeys: [] };
-  editDoc((doc) => {
-    res = pasteObjects(doc, clipboard!, anchor[0], anchor[1]);
-    return doc;
-  });
   batch(() => {
-    selection.value = new Set(res.cellKeys);
-    selectedCutIds.value = new Set(res.cutIds);
+    editDoc((doc) => {
+      res = pasteObjects(doc, clipboard!, anchor[0], anchor[1]);
+      return res.cutIds.length || res.cellKeys.length ? doc : null;
+    });
+    if (res.cutIds.length || res.cellKeys.length) {
+      selection.value = new Set(res.cellKeys);
+      selectedCutIds.value = new Set(res.cutIds);
+    }
   });
-  return true;
+  return res.cutIds.length > 0 || res.cellKeys.length > 0;
 }
 
 export function setFeatureFacilityAction(id: string, facility: string | null): void {

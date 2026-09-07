@@ -184,14 +184,17 @@ describe("物件選取：moveObjects / copyObjects / deleteObjects", () => {
     expect(doc.cells["4_4"]!.feature).toBeDefined();
   });
 
-  it("copyObjects 複製牆（新 id）與格內容、來源保留", () => {
+  it("copyObjects 複製牆（新 id）與格內容、來源保留、feature 獨立不連動", () => {
     const doc = build();
     const r = copyObjects(doc, { cutIds: ["w1"], cellKeys: ["3_3"] }, 0, 4);
     expect(r.ok).toBe(true);
     expect(doc.cuts).toHaveLength(2);
     expect(r.cutIds[0]).not.toBe("w1");
     expect(doc.cells["3_3"]).toBeDefined();
-    expect(doc.cells["7_3"]!.feature).toBe(doc.cells["3_3"]!.feature);
+    expect(doc.cells["7_3"]!.feature).toBeDefined();
+    // 複本用全新的 feature id → 不會跟來源被連動選取
+    expect(doc.cells["7_3"]!.feature).not.toBe(doc.cells["3_3"]!.feature);
+    expect(doc.features.length).toBe(2);
   });
 
   it("deleteObjects 移除牆與格標記", () => {
@@ -211,6 +214,15 @@ describe("物件選取：moveObjects / copyObjects / deleteObjects", () => {
     // 貼到 (8,5) 為左上角；原本相對位置 (row3-2, col3-2)=(1,1) → (9,6)
     expect(doc.cells["9_6"]!.feature).toBeDefined();
   });
+
+  it("pasteObjects：貼上位置靠邊 → 夾進網格、至少貼得下", () => {
+    const doc = build(); // grid 12x12
+    const clip = buildClipboard(doc, { cutIds: [], cellKeys: ["3_3"] })!;
+    // 點在最右下角 (11,11)，內容 1 格 → 夾到 (11,11) 貼得下
+    const res = pasteObjects(doc, clip, 11, 11);
+    expect(res.cellKeys.length).toBe(1);
+    expect(doc.cells["11_11"]!.feature).toBeDefined();
+  });
 });
 
 describe("setFeatureFacility", () => {
@@ -227,7 +239,7 @@ describe("setFeatureFacility", () => {
   });
 });
 
-describe("moveCutEndpoint：斜格內容依世界座標重新定位", () => {
+describe("moveCutEndpoint：斜格內容依段索引搬移／犧牲", () => {
   it("把 a 端拉近時，犧牲的是靠近 a 端（正在移動）的斜格內容", () => {
     // 水平切線 a=(2,10)→b=(22,10)，cellPx 10 → 影像 20..220，長 200，U=10 → k≈20 段
     let doc = makeDoc({
@@ -262,5 +274,28 @@ describe("moveCutEndpoint：斜格內容依世界座標重新定位", () => {
     );
     expect(feats.has("a")).toBe(true);
     expect(feats.has("b")).toBe(true);
+  });
+
+  it("長度不變（繞 a 端轉一圈回原位）→ 斜格內容完全不變", () => {
+    let doc = makeDoc({
+      grid: { w: 30, h: 30, cellPx: 10 },
+      cuts: [{ id: "w1", ax: 5, ay: 15, bx: 15, by: 15, side: 1, depth: 2, wall: true }],
+    });
+    doc.cells["Bw1_2_0"] = { cat: "c1", feature: "x" };
+    doc.cells["Bw1_5_1"] = { cat: "c1", feature: "x" };
+    const before = JSON.stringify(
+      Object.keys(doc.cells)
+        .filter((k) => k.startsWith("Bw1_"))
+        .sort(),
+    );
+    // b 端維持與 a 距離 10（等長）：從 (15,15) 轉到 (5,25) 再轉回 (15,15)
+    doc = moveCutEndpoint(doc, "w1", "b", 5, 25);
+    doc = moveCutEndpoint(doc, "w1", "b", 15, 15);
+    const after = JSON.stringify(
+      Object.keys(doc.cells)
+        .filter((k) => k.startsWith("Bw1_"))
+        .sort(),
+    );
+    expect(after).toBe(before);
   });
 });

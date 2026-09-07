@@ -104,7 +104,7 @@ export function ActionBar({ onAssign, onOffset }: { onAssign: () => void; onOffs
             disabled={!ready}
             title={ready ? undefined : t("sel.pasteHint")}
             onClick={() => {
-              if (store.clipboardPaste()) store.uiEvents.emit("toast", t("sel.paste"));
+              store.uiEvents.emit("toast", store.clipboardPaste() ? t("sel.paste") : t("sel.pasteFail"));
             }}
           >
             {ready ? t("sel.paste") : t("sel.pastePick")}

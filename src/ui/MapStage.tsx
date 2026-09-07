@@ -47,6 +47,19 @@ export function MapStage({ onAssign, onOffset }: { onAssign: () => void; onOffse
       const tool = store.activeToolId.value;
       const hasSel = store.selection.value.size > 0 || store.selectedCutIds.value.size > 0;
 
+      // 復原 / 重作（全域）：Ctrl+Z / Ctrl+Shift+Z / Ctrl+Y
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "z") {
+        e.preventDefault();
+        if (e.shiftKey) store.redo();
+        else store.undo();
+        return;
+      }
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "y") {
+        e.preventDefault();
+        store.redo();
+        return;
+      }
+
       const dir = { ArrowUp: "up", ArrowDown: "down", ArrowLeft: "left", ArrowRight: "right" }[e.key] as
         "up" | "down" | "left" | "right" | undefined;
       if (dir && hasSel) {

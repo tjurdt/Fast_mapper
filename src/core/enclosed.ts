@@ -7,7 +7,7 @@ import type { CellKey, CellPoly, Point } from "./types";
 import type { MapGeometry } from "./geometry";
 import { bandKey, gridKey, keyRC } from "./keys";
 import { bandQuad } from "./bands";
-import { clamp, clipPolyHalfPlane, polyArea, segCrossesRect } from "./poly";
+import { clamp, clipPolyHalfPlane, pointInPoly, polyArea, segCrossesRect } from "./poly";
 
 const FILL_SUB = 8; // 每格細分數（越大越精細、越慢）
 
@@ -60,6 +60,44 @@ function clipCellToRegion(k: CellKey, ref: Point, cuts: Seg[], cw: number, ch: n
   return poly.map(
     (pt) => [clamp((pt[0] - x0) / cw, 0, 1), clamp((pt[1] - y0) / ch, 0, 1)] as [number, number],
   );
+}
+
+/** 由「格內已淹到的子格遮罩」描出局部多邊形（0..1）；用來救回斜線裁切在轉折處
+ *  過度裁掉的缺口。回傳的多邊形是階梯狀（1/sub 解析度），已消去共線點。 */
+function maskOutline(mask: Uint8Array, sub: number): CellPoly | null {
+  const at = (i: number, j: number) => (i >= 0 && i < sub && j >= 0 && j < sub ? mask[j * sub + i]! : 0);
+  const next = new Map<string, [number, number]>();
+  let any = false;
+  for (let j = 0; j < sub; j++) {
+    for (let i = 0; i < sub; i++) {
+      if (!at(i, j)) continue;
+      any = true;
+      if (!at(i, j - 1)) next.set(i + "," + j, [i + 1, j]); // 上緣 →
+      if (!at(i + 1, j)) next.set(i + 1 + "," + j, [i + 1, j + 1]); // 右緣 ↓
+      if (!at(i, j + 1)) next.set(i + 1 + "," + (j + 1), [i, j + 1]); // 下緣 ←
+      if (!at(i - 1, j)) next.set(i + "," + (j + 1), [i, j]); // 左緣 ↑
+    }
+  }
+  if (!any || !next.size) return null;
+  const start = next.keys().next().value as string;
+  const raw: Point[] = [];
+  let cur = start;
+  for (let g = 0; g <= next.size; g++) {
+    const [x, y] = cur.split(",").map(Number) as [number, number];
+    raw.push([x / sub, y / sub]);
+    const nx = next.get(cur);
+    if (!nx) break;
+    cur = nx[0] + "," + nx[1];
+    if (cur === start) break;
+  }
+  const out: Point[] = [];
+  for (let i = 0; i < raw.length; i++) {
+    const a = raw[(i - 1 + raw.length) % raw.length]!;
+    const b = raw[i]!;
+    const c = raw[(i + 1) % raw.length]!;
+    if ((b[0] - a[0]) * (c[1] - a[1]) - (b[1] - a[1]) * (c[0] - a[0]) !== 0) out.push(b);
+  }
+  return out.length >= 3 ? out : null;
 }
 
 /**
@@ -199,6 +237,42 @@ export function selectEnclosedRegion(
     if (!wallH[idx + W]) push(idx + W);
   }
 
+  // 某格的已淹子格遮罩（sub×sub）。
+  const cellMask = (k: CellKey): Uint8Array => {
+    const [r, c] = keyRC(k);
+    const m = new Uint8Array(sub * sub);
+    for (let j = 0; j < sub; j++) {
+      for (let i = 0; i < sub; i++) {
+        const gi = c * sub + i;
+        const gj = r * sub + j;
+        if (gi >= 0 && gi < W && gj >= 0 && gj < H && seen[gj * W + gi]) m[j * sub + i] = 1;
+      }
+    }
+    return m;
+  };
+
+  // 斜線裁切在轉折 / 多牆處會多切掉一塊（缺口）。裁完後拿已淹遮罩驗一次：若有被淹的
+  // 子格中心落在裁切多邊形外，就改用遮罩描出的階梯多邊形，寧可略粗也不要缺角。
+  const shapeFor = (k: CellKey, rp: Point): CellPoly | null => {
+    const clip = clipCellToRegion(k, rp, cuts, cw, ch);
+    const mask = cellMask(k);
+    let flooded = 0;
+    let outside = 0;
+    for (let j = 0; j < sub; j++) {
+      for (let i = 0; i < sub; i++) {
+        if (!mask[j * sub + i]) continue;
+        flooded++;
+        const p: Point = [(i + 0.5) / sub, (j + 0.5) / sub];
+        if (clip ? !pointInPoly(p[0], p[1], clip) : false) outside++;
+      }
+    }
+    if (clip) return outside >= 2 ? (maskOutline(mask, sub) ?? clip) : clip;
+    // clip 為 null：沒被切線實質裁到。遮罩若幾乎全滿（僅端點封口挖掉一兩格）→ 整格；
+    // 否則（真的有一塊沒淹到）用遮罩描出階梯外形。
+    if (flooded >= sub * sub - 3) return null;
+    return maskOutline(mask, sub);
+  };
+
   const keys: CellKey[] = [];
   const shapes = new Map<CellKey, CellPoly | null>();
   const refPt = new Map<CellKey, Point>();
@@ -207,7 +281,7 @@ export function selectEnclosedRegion(
     const rp: Point = [acc[0] / acc[2], acc[1] / acc[2]];
     refPt.set(k, rp);
     keys.push(k);
-    shapes.set(k, clipCellToRegion(k, rp, cuts, cw, ch));
+    shapes.set(k, shapeFor(k, rp));
   });
 
   // 邊界殘片回收：洪水以 1/8 子格為單位，斜牆會讓「區域側只剩不到一個子格」的邊界格

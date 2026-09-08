@@ -93,16 +93,22 @@ export function assignCells(doc: MapDoc, keys: Iterable<CellKey>, args: AssignAr
     const hasShape = args.shapes?.has(k) ?? false;
     const sp = hasShape ? (args.shapes!.get(k) ?? null) : undefined;
 
-    // 這格已屬於別的命名區域、而且是被切線切出來的「斜切格」時，依面積多數決定歸屬：
-    // 佔比較少的一方不動它，避免先框選 A 半、再框選 B 半時把 A 半（或其邊角）一起改掉。
-    if (
-      prev?.feature &&
-      prev.feature !== feature.id &&
-      Array.isArray(prev.poly) &&
-      prev.poly.length >= 3
-    ) {
+    // 這格已屬於別的命名區域、而且是被切線切出來的「斜切格」：一格只能屬一區，
+    // 硬把兩邊各留一塊斜切多邊形，交界就會出現白色鋸齒縫。改成整格判給面積多數的一方
+    // （交界呈階梯狀但完全無縫）。少數的一方連原本的斜切外形也一併清成整格。
+    if (prev?.feature && prev.feature !== feature.id && Array.isArray(prev.poly) && prev.poly.length >= 3) {
+      if (!hasShape) continue; // 網格框選：不動既有的線條物件
       const incomingArea = sp && sp.length >= 3 ? polyArea(sp) : 1;
-      if (incomingArea <= polyArea(prev.poly)) continue;
+      if (incomingArea < polyArea(prev.poly)) {
+        delete doc.cells[k]!.poly; // 舊區佔多數 → 舊區整格接管
+        continue;
+      }
+      // 新區佔多數 → 往下走，但整格接管（不套斜切外形）
+      delete cur.poly;
+      cur.cat = categoryId;
+      cur.feature = feature.id;
+      keepOrDrop(doc.cells, k, cur);
+      continue;
     }
 
     if (hasShape) {

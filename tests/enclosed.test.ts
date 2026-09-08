@@ -73,6 +73,14 @@ describe("被中線切開的三角形 A/B 兩半", () => {
     // A 半內部格仍屬 A
     expect(doc.cells["2_2"]!.cat).toBe("cA");
     expect(doc.cells["2_2"]!.feature).toBe(featA);
+
+    // 交界不留白縫：中線經過（兩半都選到）的格子每一格都完整歸給 A 或 B
+    // ——依面積多數整格接管，不會兩邊各留半塊斜切多邊形而中間露白。
+    for (const k of rA.keys.filter((x) => rB.keys.includes(x))) {
+      const d = doc.cells[k]!;
+      expect(d.cat === "cA" || d.cat === "cB").toBe(true);
+      expect(d.poly).toBeUndefined();
+    }
   });
 });
 

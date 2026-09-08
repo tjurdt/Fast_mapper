@@ -4,12 +4,76 @@
  * 移植自 legacy 的 assign apply / eraseSelection / moveSelection / ensureNamedRegions /
  * cut sheet handlers。
  */
-import type { Cell, CellKey, CellPoly, Cut, Feature, MapDoc } from "../core/types";
+import type { Cell, CellFragment, CellKey, CellPoly, Cut, Feature, MapDoc, Point } from "../core/types";
 import { bandKey, isBandKey, keyRC, parseBandKey } from "../core/keys";
 import { cellHidden } from "../core/cells";
 import { MapGeometry } from "../core/geometry";
 import { cutGeom } from "../core/bands";
-import { clamp, polyArea } from "../core/poly";
+import { clamp, clipUnitCell, pointInPoly, polyArea, wallsForCell } from "../core/poly";
+
+/** 在方格內找一個不落在任何 avoid 多邊形裡的取樣點。 */
+const CELL_SAMPLES: Point[] = [];
+for (let sy = 1; sy < 8; sy++) for (let sx = 1; sx < 8; sx++) CELL_SAMPLES.push([sx / 8, sy / 8]);
+function refOutside(avoid: readonly CellPoly[]): Point {
+  for (const s of CELL_SAMPLES) {
+    if (!avoid.some((p) => p.length >= 3 && pointInPoly(s[0], s[1], p))) return s;
+  }
+  return [0.5, 0.5];
+}
+const partArea = (p: CellPoly | null | undefined) => (p && p.length >= 3 ? polyArea(p) : 1);
+
+/**
+ * 把 incoming 片段加入這格（原本屬於別區、已被切成斜切格）。回傳新的 cat/feature/poly/frags：
+ * 每一片都用實際切線裁出、彼此互補不重疊、主片段取面積最大者。
+ */
+function centroid(poly: CellPoly): Point {
+  let x = 0;
+  let y = 0;
+  for (const p of poly) {
+    x += p[0];
+    y += p[1];
+  }
+  return [x / poly.length, y / poly.length];
+}
+
+function splitAssign(
+  prev: Cell,
+  incoming: { cat: string; feature: string; poly: CellPoly | null },
+  cuts: readonly Cut[],
+  r: number,
+  c: number,
+): Pick<Cell, "cat" | "feature" | "poly" | "frags"> {
+  const walls = wallsForCell(cuts, r, c);
+  type P = { cat: string; feature: string; poly: CellPoly | null };
+  const parts: P[] = [];
+  if (prev.cat && prev.feature && prev.feature !== incoming.feature)
+    parts.push({ cat: prev.cat, feature: prev.feature, poly: prev.poly ?? null });
+  for (const f of prev.frags ?? [])
+    if (f.feature !== incoming.feature) parts.push({ cat: f.cat, feature: f.feature, poly: f.poly });
+  parts.push({ ...incoming });
+
+  // 全部片段用同一組切線重新裁一次，保證彼此互補、不重疊、不留縫。
+  const others = () => parts.map((p) => p.poly).filter((p): p is CellPoly => !!p && p.length >= 3);
+  const resolved: P[] = parts.map((p) => {
+    const ref: Point = p.poly && p.poly.length >= 3 ? centroid(p.poly) : refOutside(others());
+    const clipped = walls.length ? clipUnitCell(ref, walls) : p.poly;
+    return { cat: p.cat, feature: p.feature, poly: clipped ?? p.poly ?? null };
+  });
+
+  const all = resolved.filter((p) => p.poly === null || p.poly.length >= 3);
+  all.sort((a, b) => partArea(b.poly) - partArea(a.poly));
+  const primary = all[0] ?? { cat: incoming.cat, feature: incoming.feature, poly: incoming.poly };
+  const frags: CellFragment[] = all
+    .slice(1)
+    .filter((p): p is P & { poly: CellPoly } => !!p.poly && p.poly.length >= 3)
+    .map((p) => ({ cat: p.cat, feature: p.feature, poly: p.poly }));
+  return {
+    cat: primary.cat,
+    feature: primary.feature,
+    ...(primary.poly && primary.poly.length >= 3 ? { poly: primary.poly } : {}),
+    ...(frags.length ? { frags } : {}),
+  };
+}
 
 const UNNAMED_PREFIX = "未命名";
 const MAX_CUT_DEPTH = 8;
@@ -19,7 +83,7 @@ function rid(prefix: string): string {
 }
 
 function keepOrDrop(cells: Record<CellKey, Cell>, k: CellKey, cell: Cell): void {
-  if (cell.plan || cell.cat || cell.feature || cell.poly) cells[k] = cell;
+  if (cell.plan || cell.cat || cell.feature || cell.poly || cell.frags?.length) cells[k] = cell;
   else delete cells[k];
 }
 
@@ -39,8 +103,9 @@ export function nextUnnamedName(doc: MapDoc, categoryId: string): string {
 export function pruneUnnamedFeatures(doc: MapDoc): MapDoc {
   const used = new Set<string>();
   for (const k in doc.cells) {
-    const f = doc.cells[k]!.feature;
-    if (f) used.add(f);
+    const d = doc.cells[k]!;
+    if (d.feature) used.add(d.feature);
+    for (const fr of d.frags ?? []) used.add(fr.feature);
   }
   doc.features = doc.features.filter((f) => !(f.name.startsWith(UNNAMED_PREFIX) && !used.has(f.id)));
   return doc;
@@ -50,8 +115,9 @@ export function pruneUnnamedFeatures(doc: MapDoc): MapDoc {
 export function pruneOrphanFeatures(doc: MapDoc): MapDoc {
   const used = new Set<string>();
   for (const k in doc.cells) {
-    const f = doc.cells[k]!.feature;
-    if (f) used.add(f);
+    const d = doc.cells[k]!;
+    if (d.feature) used.add(d.feature);
+    for (const fr of d.frags ?? []) used.add(fr.feature);
   }
   doc.features = doc.features.filter((f) => used.has(f.id));
   return doc;
@@ -92,25 +158,42 @@ export function assignCells(doc: MapDoc, keys: Iterable<CellKey>, args: AssignAr
     if (cellHidden(cur)) delete cur.poly;
     const hasShape = args.shapes?.has(k) ?? false;
     const sp = hasShape ? (args.shapes!.get(k) ?? null) : undefined;
+    const [r, c] = keyRC(k);
 
-    // 這格已屬於別的命名區域、而且是被切線切出來的「斜切格」：一格只能屬一區，
-    // 硬把兩邊各留一塊斜切多邊形，交界就會出現白色鋸齒縫。改成整格判給面積多數的一方
-    // （交界呈階梯狀但完全無縫）。少數的一方連原本的斜切外形也一併清成整格。
-    if (prev?.feature && prev.feature !== feature.id && Array.isArray(prev.poly) && prev.poly.length >= 3) {
-      if (!hasShape) continue; // 網格框選：不動既有的線條物件
-      const incomingArea = sp && sp.length >= 3 ? polyArea(sp) : 1;
-      if (incomingArea < polyArea(prev.poly)) {
-        delete doc.cells[k]!.poly; // 舊區佔多數 → 舊區整格接管
-        continue;
-      }
-      // 新區佔多數 → 往下走，但整格接管（不套斜切外形）
-      delete cur.poly;
-      cur.cat = categoryId;
-      cur.feature = feature.id;
-      keepOrDrop(doc.cells, k, cur);
+    // 主片段屬於別的命名區域、而且這格是「斜切格 / 已拆片段」或本次帶了裁切形狀
+    // → 需要拆片段共存。（主片段就是本區、或整格覆蓋整格 → 走下面一般路徑。）
+    const conflict =
+      !!prev &&
+      !!prev.feature &&
+      prev.feature !== feature.id &&
+      (hasShape || !!prev.poly || !!prev.frags) &&
+      !isBandKey(k);
+
+    if (conflict) {
+      // 這格已被別區用切線切出斜切片段。一格塞不下兩塊完整資訊，改成存多片段
+      // （frags）：每片用實際切線裁出、彼此互補不重疊，渲染 / 命中測試會逐片處理，
+      // 兩區的斜邊就能完美對齊、中間不留白縫。
+      if (!hasShape) continue; // 網格框選沒帶形狀又碰到既有斜切物件 → 不硬吃
+      const merged = splitAssign(
+        prev!,
+        { cat: categoryId, feature: feature.id, poly: sp ?? null },
+        doc.cuts,
+        r,
+        c,
+      );
+      const next: Cell = { ...cur };
+      delete next.poly;
+      delete next.frags;
+      next.cat = merged.cat;
+      next.feature = merged.feature;
+      if (merged.poly) next.poly = merged.poly;
+      if (merged.frags) next.frags = merged.frags;
+      keepOrDrop(doc.cells, k, next);
       continue;
     }
 
+    // 一般指定：同區或全新格。清掉可能殘留的別區片段。
+    if (cur.frags) delete cur.frags;
     if (hasShape) {
       if (sp) cur.poly = sp;
       else delete cur.poly;
@@ -131,6 +214,7 @@ export function eraseCells(doc: MapDoc, keys: Iterable<CellKey>): MapDoc {
     delete cur.cat;
     delete cur.feature;
     delete cur.poly;
+    delete cur.frags;
     if (!cur.plan) delete doc.cells[k];
   }
   return pruneUnnamedFeatures(doc);
@@ -177,7 +261,10 @@ export function moveSelection(doc: MapDoc, keys: CellKey[], dir: MoveDir): MoveR
   const geo = new MapGeometry(doc);
   const [dr, dc] = delta;
   const targets = new Map<CellKey, CellKey>();
-  const carried = new Map<CellKey, { cat?: string; feature?: string; poly?: CellPoly }>();
+  const carried = new Map<
+    CellKey,
+    { cat?: string; feature?: string; poly?: CellPoly; frags?: CellFragment[] }
+  >();
   let hasActual = false;
 
   for (const k of keys) {
@@ -188,10 +275,11 @@ export function moveSelection(doc: MapDoc, keys: CellKey[], dir: MoveDir): MoveR
       return { ok: false, reason: "已到達網格邊界" };
     const d = doc.cells[k] ?? {};
     targets.set(k, `${nr}_${nc}`);
-    const c2: { cat?: string; feature?: string; poly?: CellPoly } = {};
+    const c2: { cat?: string; feature?: string; poly?: CellPoly; frags?: CellFragment[] } = {};
     if (d.cat) c2.cat = d.cat;
     if (d.feature) c2.feature = d.feature;
     if (d.poly) c2.poly = d.poly;
+    if (d.frags?.length) c2.frags = d.frags;
     carried.set(k, c2);
     if (d.cat || d.feature) hasActual = true;
   }
@@ -205,6 +293,7 @@ export function moveSelection(doc: MapDoc, keys: CellKey[], dir: MoveDir): MoveR
     delete d.cat;
     delete d.feature;
     delete d.poly;
+    delete d.frags;
     if (!d.plan) delete next[k];
   };
   for (const k of keys) clearActual(k);
@@ -217,6 +306,7 @@ export function moveSelection(doc: MapDoc, keys: CellKey[], dir: MoveDir): MoveR
     if (moved.cat) d.cat = moved.cat;
     if (moved.feature) d.feature = moved.feature;
     if (moved.poly) d.poly = moved.poly;
+    if (moved.frags) d.frags = moved.frags;
     next[nk] = d;
   }
 
@@ -251,6 +341,8 @@ export function copySelection(doc: MapDoc, keys: CellKey[], dr: number, dc: numb
     if (src.feature) target.feature = src.feature;
     if (src.poly) target.poly = src.poly;
     else delete target.poly;
+    if (src.frags?.length) target.frags = src.frags;
+    else delete target.frags;
     doc.cells[dest[i]!] = target;
     copied++;
   });
@@ -298,7 +390,10 @@ export function moveObjects(doc: MapDoc, sel: ObjectSelection, dx: number, dy: n
   }
 
   const targets = new Map<CellKey, CellKey>();
-  const carried = new Map<CellKey, { cat?: string; feature?: string; poly?: CellPoly }>();
+  const carried = new Map<
+    CellKey,
+    { cat?: string; feature?: string; poly?: CellPoly; frags?: CellFragment[] }
+  >();
   for (const k of gridKeys) {
     const [r, c] = keyRC(k);
     targets.set(k, `${r + dy}_${c + dx}`);
@@ -307,6 +402,7 @@ export function moveObjects(doc: MapDoc, sel: ObjectSelection, dx: number, dy: n
       ...(d.cat ? { cat: d.cat } : {}),
       ...(d.feature ? { feature: d.feature } : {}),
       ...(d.poly ? { poly: d.poly } : {}),
+      ...(d.frags?.length ? { frags: d.frags } : {}),
     });
   }
   const clearActual = (k: CellKey) => {
@@ -315,6 +411,7 @@ export function moveObjects(doc: MapDoc, sel: ObjectSelection, dx: number, dy: n
     delete d.cat;
     delete d.feature;
     delete d.poly;
+    delete d.frags;
     if (!d.plan) delete doc.cells[k];
   };
   for (const k of gridKeys) clearActual(k);
@@ -377,6 +474,8 @@ export function copyObjects(
     if (src.feature) t.feature = src.feature;
     if (src.poly) t.poly = src.poly;
     else delete t.poly;
+    if (src.frags?.length) t.frags = src.frags;
+    else delete t.frags;
     doc.cells[nk] = t;
     newCellKeys.push(nk);
   }
@@ -405,6 +504,7 @@ export interface ClipCell {
   cat?: string;
   feature?: string;
   poly?: CellPoly;
+  frags?: CellFragment[];
 }
 export interface Clipboard {
   cuts: ClipCut[];
@@ -448,6 +548,7 @@ export function buildClipboard(doc: MapDoc, sel: ObjectSelection): Clipboard | n
         ...(d.cat ? { cat: d.cat } : {}),
         ...(d.feature ? { feature: d.feature } : {}),
         ...(d.poly ? { poly: d.poly } : {}),
+        ...(d.frags?.length ? { frags: d.frags } : {}),
       };
     }),
   };
@@ -501,6 +602,8 @@ export function pasteObjects(
     if (c.feature) t.feature = c.feature;
     if (c.poly) t.poly = c.poly;
     else delete t.poly;
+    if (c.frags?.length) t.frags = c.frags;
+    else delete t.frags;
     doc.cells[k] = t;
     cellKeys.push(k);
   }

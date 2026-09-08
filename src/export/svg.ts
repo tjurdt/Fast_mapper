@@ -1,5 +1,5 @@
 /** 向量匯出。移植自 legacy buildSVG + svgCell / svgQuad / svgBandMasks / svgBands / svgCuts。 */
-import { cellShape } from "../core/cells";
+import { cellParts } from "../core/cells";
 import { cutGeom } from "../core/bands";
 import { keyRC, isBandKey } from "../core/keys";
 import type { CellPoly, MapDoc, Point } from "../core/types";
@@ -68,10 +68,11 @@ export function buildSvg(
     for (const k in doc.cells) {
       const d = doc.cells[k]!;
       if (!d.cat || isBandKey(k) || geo.cellCovered(k)) continue;
-      const col = catColor.get(d.cat);
-      if (!col) continue;
       const [rr, c] = keyRC(k);
-      r += svgCell(rr, c, cellShape(d), cw, ch, `fill="${col}" fill-opacity="${a}"`);
+      for (const p of cellParts(d)) {
+        const col = catColor.get(p.cat);
+        if (col) r += svgCell(rr, c, p.poly, cw, ch, `fill="${col}" fill-opacity="${a}"`);
+      }
     }
     r += `</g>`;
   }

@@ -3,7 +3,10 @@
  * 移植自 legacy index.html：polyArea / clipPolyHalfPlane / clipPolyToRect /
  * pointInPoly / subtractIntervals。
  */
-import type { Point, Polygon } from "./types";
+import type { CellPoly, Point, Polygon } from "./types";
+
+/** 線段 [ax,ay,bx,by]。 */
+export type Segment4 = readonly [number, number, number, number];
 
 export type Interval = readonly [number, number];
 
@@ -107,6 +110,52 @@ export function segCrossesRect(
     }
   }
   return t1 - t0 > -1e-9;
+}
+
+/**
+ * 單位方格 (0..1)² 依「穿過它的線段」裁到 `ref` 那一側。
+ * `walls` 為方格局部座標的線段（0..1 附近）。回傳局部多邊形；
+ * 沒有任何線段實際切過方格、或裁完幾乎整格 → null。
+ */
+export function clipUnitCell(ref: Point, walls: readonly Segment4[]): CellPoly | null {
+  let poly: Point[] = [
+    [0, 0],
+    [1, 0],
+    [1, 1],
+    [0, 1],
+  ];
+  let clipped = false;
+  for (const w of walls) {
+    const [ax, ay, bx, by] = w;
+    if (!segCrossesRect(ax, ay, bx, by, 0, 0, 1, 1)) continue;
+    const f = (p: Point) => (bx - ax) * (p[1] - ay) - (by - ay) * (p[0] - ax);
+    const sgn = f(ref) >= 0 ? 1 : -1;
+    const cross = (a: Point, b: Point): Point => {
+      const fa = f(a);
+      const fb = f(b);
+      const u = Math.abs(fa - fb) < 1e-12 ? 0 : fa / (fa - fb);
+      return [a[0] + (b[0] - a[0]) * u, a[1] + (b[1] - a[1]) * u];
+    };
+    poly = clipPolyHalfPlane(poly, (p) => sgn * f(p) >= -1e-9, cross);
+    clipped = true;
+    if (poly.length < 3) break;
+  }
+  if (!clipped || poly.length < 3 || polyArea(poly) >= 1 - 1e-3) return null;
+  return poly.map((p) => [clamp(p[0], 0, 1), clamp(p[1], 0, 1)] as [number, number]);
+}
+
+/** 把 doc 座標（格為單位）的切線轉成某格 (r,c) 的局部座標線段。 */
+export function wallsForCell(
+  cuts: readonly { ax: number; ay: number; bx: number; by: number }[],
+  r: number,
+  c: number,
+): Segment4[] {
+  const out: Segment4[] = [];
+  for (const t of cuts) {
+    const s: Segment4 = [t.ax - c, t.ay - r, t.bx - c, t.by - r];
+    if (segCrossesRect(s[0], s[1], s[2], s[3], 0, 0, 1, 1)) out.push(s);
+  }
+  return out;
 }
 
 /** 點到線段距離。 */

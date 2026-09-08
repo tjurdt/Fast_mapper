@@ -3,9 +3,12 @@
  * 由 action 負責 history、重算 geometry/numbers、以及防抖存檔。
  */
 import { batch, computed, signal } from "@preact/signals";
-import type { CellKey, CellPoly, MapDoc } from "../core/types";
+import type { CellKey, CellPoly, MapDoc, Point } from "../core/types";
 import { MapGeometry } from "../core/geometry";
 import { selectEnclosedRegion } from "../core/enclosed";
+import { cellParts } from "../core/cells";
+import { keyRC } from "../core/keys";
+import { clipUnitCell, pointInPoly, wallsForCell } from "../core/poly";
 import { computeNumbers } from "../core/numbering";
 import { DocHistory } from "../model/commands";
 import { cloneDoc, loadProject, serializeProject } from "../model/document";
@@ -294,15 +297,34 @@ export function selectRect(rect: readonly [number, number, number, number], add 
   if (!geo || !p) return;
   const keys = geo.cellsInRect(rect[0], rect[1], rect[2], rect[3], p.view.view === "actual");
   const next = add ? new Set(selection.value) : new Set<CellKey>();
+  const shapes: Map<CellKey, CellPoly | null> = add ? new Map(selectionShapes.value) : new Map();
+  const SAMP: Point[] = [];
+  for (let sy = 1; sy < 8; sy++) for (let sx = 1; sx < 8; sx++) SAMP.push([sx / 8, sy / 8]);
   for (const k of keys) {
-    // 網格框選只吃「整格」：略過屬於線條物件的斜切格，選取邊界才會貼著既有物件、
-    // 不會咬進去也不會沿用物件的鋸齒外形。
-    const poly = p.doc.cells[k]?.poly;
-    if (poly && poly.length >= 3) continue;
+    if (k.charCodeAt(0) === 66) {
+      next.add(k);
+      continue;
+    }
+    const parts = cellParts(p.doc.cells[k]);
+    const solid = parts.map((pt) => pt.poly).filter((pp): pp is CellPoly => !!pp && pp.length >= 3);
+    if (!solid.length) {
+      next.add(k);
+      shapes.delete(k);
+      continue;
+    }
+    // 這格已被線條物件用斜切多邊形佔了一部分：框選取「剩下的空白」那塊，
+    // 邊界就會貼著物件，之後指定分類時以片段（frag）併入、不咬掉物件。
+    const [r, c] = keyRC(k);
+    const ref = SAMP.find((s) => !solid.some((pp) => pointInPoly(s[0], s[1], pp)));
+    if (!ref) continue; // 整格都被佔 → 跳過
+    const comp = clipUnitCell(ref, wallsForCell(p.doc.cuts, r, c));
     next.add(k);
+    if (comp) shapes.set(k, comp);
   }
-  selection.value = next;
-  if (selectionShapes.value.size) selectionShapes.value = new Map();
+  batch(() => {
+    selection.value = next;
+    selectionShapes.value = shapes;
+  });
 }
 
 /** 點在被牆圍住的空白處 → 選取整塊封閉區域（邊界格裁成斜切形狀）。 */

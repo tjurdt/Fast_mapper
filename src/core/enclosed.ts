@@ -129,10 +129,19 @@ export function selectEnclosedRegion(
 
   // 兩線段是否相交（含端點碰觸）。
   const segHit = (
-    ax: number, ay: number, bx: number, by: number,
-    cx: number, cy: number, dx: number, dy: number,
+    ax: number,
+    ay: number,
+    bx: number,
+    by: number,
+    cx: number,
+    cy: number,
+    dx: number,
+    dy: number,
   ) => {
-    const d1x = bx - ax, d1y = by - ay, d2x = dx - cx, d2y = dy - cy;
+    const d1x = bx - ax,
+      d1y = by - ay,
+      d2x = dx - cx,
+      d2y = dy - cy;
     const den = d1x * d2y - d1y * d2x;
     if (Math.abs(den) < 1e-12) return false; // 平行 / 共線：交由鄰邊處理
     const s = ((cx - ax) * d2y - (cy - ay) * d2x) / den;

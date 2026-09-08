@@ -3,7 +3,7 @@
  * 共用這一套，確保匯出與畫面一致。全部在影像單位空間繪製（ctx 變換由呼叫端設定）。
  * 移植自 legacy drawBaseLayer / drawOverlayLayer / drawBandGrid / drawShopBorders / drawLabels。
  */
-import { cellShape } from "../core/cells";
+import { cellParts } from "../core/cells";
 import { cutGeom } from "../core/bands";
 import { keyRC } from "../core/keys";
 import type { CellPoly, MapDoc } from "../core/types";
@@ -55,14 +55,15 @@ export function drawActualFill(
   for (const k in doc.cells) {
     const d = doc.cells[k]!;
     if (!d.cat || k.charCodeAt(0) === 66 || geo.cellCovered(k)) continue;
-    const col = color.get(d.cat);
-    if (!col) continue;
     const [r, c] = keyRC(k);
-    const poly = cellShape(d);
-    if (poly) {
-      if (poly.length >= 3) shaped.push({ r, c, poly, col });
-    } else {
-      (rects.get(col) ?? rects.set(col, []).get(col)!).push([r, c]);
+    for (const p of cellParts(d)) {
+      const col = color.get(p.cat);
+      if (!col) continue;
+      if (p.poly) {
+        if (p.poly.length >= 3) shaped.push({ r, c, poly: p.poly, col });
+      } else {
+        (rects.get(col) ?? rects.set(col, []).get(col)!).push([r, c]);
+      }
     }
   }
   const cw = dims.cw;

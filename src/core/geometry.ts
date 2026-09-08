@@ -9,9 +9,9 @@
  */
 import type { Cell, CellKey, Cut, MapDoc, Point } from "./types";
 import { bandKey, gridKey, isBandKey, keyRC, parseBandKey } from "./keys";
-import { cellHidden, cellShape, cellSideIntervals } from "./cells";
+import { cellHasFeature, cellHidden, cellParts, cellShape, cellSideIntervals, partAt } from "./cells";
 import { bandLocate, bandOuter, bandQuad, computeBandCover, cutGeomCached, type CutGeom } from "./bands";
-import { clamp, clipPolyToRect, pointInPoly, polyArea, segCrossesRect, subtractIntervals } from "./poly";
+import { clamp, clipPolyToRect, polyArea, segCrossesRect, subtractIntervals } from "./poly";
 
 const SQUARE: Point[] = [
   [0, 0],
@@ -221,9 +221,13 @@ export class MapGeometry {
     for (const k in this.doc.cells) {
       const d = this.doc.cells[k]!;
       if (!d.feature || !this.cellVisible(k, d)) continue;
-      const a = m.get(d.feature);
-      if (a) a.push(k);
-      else m.set(d.feature, [k]);
+      const feats = new Set<string>([d.feature]);
+      for (const fr of d.frags ?? []) feats.add(fr.feature);
+      for (const f of feats) {
+        const a = m.get(f);
+        if (a) a.push(k);
+        else m.set(f, [k]);
+      }
     }
     this._featureKeyIndex = m;
     return m;
@@ -354,13 +358,8 @@ export class MapGeometry {
     if (r < 0 || r >= this.gridH || c < 0 || c >= this.gridW) return null;
     const d = this.doc.cells[gridKey(r, c)];
     if (!d || !d.feature) return null;
-    const poly = cellShape(d);
-    const inside = !poly
-      ? true
-      : poly.length < 3
-        ? false
-        : pointInPoly(x / this.cw - c, y / this.ch - r, poly);
-    return inside ? d.feature : null;
+    const hit = partAt(d, x / this.cw - c, y / this.ch - r);
+    return hit && hit.feature ? hit.feature : null;
   }
 
   bandFeatureAtPoint(x: number, y: number): string | null {
@@ -552,10 +551,16 @@ export class MapGeometry {
 
   // ---- 邊界線段（給渲染 / 匯出用）----
 
-  /** 單一格對其所屬 feature 的邊界線段（會扣掉與同 feature 鄰格共用的邊）。 */
-  featureBorderSegments(k: CellKey, d: Cell): Segment[] {
+  /** 單一格某片段對其 feature 的邊界線段（會扣掉與同 feature 鄰格共用的邊）。 */
+  featureBorderSegments(
+    k: CellKey,
+    d: Cell,
+    forPoly?: readonly Point[] | null,
+    forFeature?: string,
+  ): Segment[] {
     const [r, c] = keyRC(k);
-    const poly = cellShape(d);
+    const poly = forPoly === undefined ? cellShape(d) : forPoly;
+    const featureId = forFeature ?? d.feature;
     const segs: Segment[] = [];
     if (poly && poly.length < 3) return segs;
     const pts = poly ?? SQUARE;
@@ -580,7 +585,7 @@ export class MapGeometry {
       const lo = side < 2 ? Math.min(q[0], w[0]) : Math.min(q[1], w[1]);
       const hi = side < 2 ? Math.max(q[0], w[0]) : Math.max(q[1], w[1]);
       const subs =
-        nd && nd.feature === d.feature && !cellHidden(nd) && !this.cellCovered(nk)
+        nd && featureId && cellHasFeature(nd, featureId) && !cellHidden(nd) && !this.cellCovered(nk)
           ? cellSideIntervals(nd, opp(side) as 0 | 1 | 2 | 3)
           : [];
       for (const part of subtractIntervals([lo, hi], subs)) {
@@ -640,9 +645,21 @@ export class MapGeometry {
       return out;
     }
     if (this.cellCovered(k)) return [];
-    if (this.isInteriorCell(k, d)) return []; // 四周都是同區域 → 無邊界，快速跳過
-    const segs = this.featureBorderSegments(k, d);
-    if (!this.deepCuts().length || !this.bandNear().has(k)) return segs; // 遠離帶 → 略過昂貴過濾
-    return segs.filter((g) => this.bandFeatureAtPoint((g[0] + g[2]) / 2, (g[1] + g[3]) / 2) !== d.feature);
+    if (!d.frags?.length) {
+      if (this.isInteriorCell(k, d)) return []; // 四周都是同區域 → 無邊界，快速跳過
+      const segs = this.featureBorderSegments(k, d);
+      if (!this.deepCuts().length || !this.bandNear().has(k)) return segs;
+      return segs.filter((g) => this.bandFeatureAtPoint((g[0] + g[2]) / 2, (g[1] + g[3]) / 2) !== d.feature);
+    }
+    // 多片段格：逐片畫外框（各片以自己的 feature 判斷共用邊）
+    const out: Segment[] = [];
+    for (const p of cellParts(d)) {
+      out.push(...this.featureBorderSegments(k, d, p.poly, p.feature));
+    }
+    if (!this.deepCuts().length || !this.bandNear().has(k)) return out;
+    return out.filter((g) => {
+      const f = this.bandFeatureAtPoint((g[0] + g[2]) / 2, (g[1] + g[3]) / 2);
+      return f === null || !cellHasFeature(d, f);
+    });
   }
 }

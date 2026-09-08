@@ -19,6 +19,7 @@ import {
   setFeatureCategory,
   setFeatureFacility,
 } from "../src/model/edits";
+import { polyArea } from "../src/core/poly";
 import { makeDoc } from "./helpers";
 
 describe("assignCells", () => {
@@ -50,7 +51,7 @@ describe("assignCells", () => {
     expect(doc.cells["0_1"]!.cat).toBe("c2");
   });
 
-  it("斜切格已屬別區時依面積多數決定歸屬（少數的一方不被覆蓋）", () => {
+  it("斜切格已屬別區時：兩片段共存、互補鋪滿整格、主片段取面積大者", () => {
     let doc = makeDoc({
       categories: [
         { id: "c1", name: "A", color: "#111" },
@@ -61,36 +62,46 @@ describe("assignCells", () => {
     doc = assignCells(doc, ["0_0"], {
       categoryId: "c1",
       featureName: "A區",
-      shapes: new Map([["0_0", [[0, 0], [1, 0], [1, 0.7], [0, 0.7]] as [number, number][]]]),
+      shapes: new Map([
+        [
+          "0_0",
+          [
+            [0, 0],
+            [1, 0],
+            [1, 0.7],
+            [0, 0.7],
+          ] as [number, number][],
+        ],
+      ]),
     });
-    const featA = doc.cells["0_0"]!.feature;
-    // 再用另一個分類、只給這格剩下 30% → 應被拒絕，維持 A
+    // 再把剩下 30% 給 B → A 保留為主片段、B 成為 frag，兩片鋪滿整格
     doc = assignCells(doc, ["0_0"], {
       categoryId: "c2",
       featureName: "B區",
-      shapes: new Map([["0_0", [[0, 0.7], [1, 0.7], [1, 1], [0, 1]] as [number, number][]]]),
+      shapes: new Map([
+        [
+          "0_0",
+          [
+            [0, 0.7],
+            [1, 0.7],
+            [1, 1],
+            [0, 1],
+          ] as [number, number][],
+        ],
+      ]),
     });
-    expect(doc.cells["0_0"]!.feature).toBe(featA);
-    expect(doc.cells["0_0"]!.cat).toBe("c1");
+    const d = doc.cells["0_0"]!;
+    expect(d.cat).toBe("c1"); // 主片段＝面積大的 A
+    expect(d.frags).toHaveLength(1);
+    expect(d.frags![0]!.cat).toBe("c2");
+    const covered = polyArea(d.poly!) + d.frags!.reduce((s, f) => s + polyArea(f.poly), 0);
+    expect(covered).toBeGreaterThan(0.98);
+    expect(covered).toBeLessThan(1.02);
 
-    // 反過來：B 佔多數 → 接管這格
-    let doc2 = makeDoc({
-      categories: [
-        { id: "c1", name: "A", color: "#111" },
-        { id: "c2", name: "B", color: "#222" },
-      ],
-    });
-    doc2 = assignCells(doc2, ["0_0"], {
-      categoryId: "c1",
-      featureName: "A區",
-      shapes: new Map([["0_0", [[0, 0], [1, 0], [1, 0.3], [0, 0.3]] as [number, number][]]]),
-    });
-    doc2 = assignCells(doc2, ["0_0"], {
-      categoryId: "c2",
-      featureName: "B區",
-      shapes: new Map([["0_0", [[0, 0.3], [1, 0.3], [1, 1], [0, 1]] as [number, number][]]]),
-    });
-    expect(doc2.cells["0_0"]!.cat).toBe("c2");
+    // 再指定同一格給 A（含 B 那塊）→ frags 清空、整格回歸 A
+    doc = assignCells(doc, ["0_0"], { categoryId: "c1", featureId: d.feature });
+    expect(doc.cells["0_0"]!.frags).toBeUndefined();
+    expect(doc.cells["0_0"]!.cat).toBe("c1");
   });
 
   it("留空名稱 → 自動命名 未命名<分類>1", () => {

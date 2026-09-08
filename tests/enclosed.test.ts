@@ -2,6 +2,8 @@ import { describe, expect, it } from "vitest";
 import { MapGeometry } from "../src/core/geometry";
 import { selectEnclosedRegion } from "../src/core/enclosed";
 import { assignCells } from "../src/model/edits";
+import { cellParts } from "../src/core/cells";
+import { polyArea } from "../src/core/poly";
 import { makeDoc } from "./helpers";
 import type { Cut } from "../src/core/types";
 
@@ -49,7 +51,9 @@ describe("被中線切開的三角形 A/B 兩半", () => {
     { id: "cA", name: "A", color: "#111" },
     { id: "cB", name: "B", color: "#222" },
   ];
-  const geo = new MapGeometry(makeDoc({ grid: { w: 12, h: 12, cellPx: 10 }, cuts: triangle, categories: cats }));
+  const geo = new MapGeometry(
+    makeDoc({ grid: { w: 12, h: 12, cellPx: 10 }, cuts: triangle, categories: cats }),
+  );
 
   it("選 A 半上色、再選 B 半上色，A 半不會被 B 吃掉", () => {
     const rA = selectEnclosedRegion(geo, 2.6 * 10, 2.6 * 10, "plan");
@@ -74,12 +78,16 @@ describe("被中線切開的三角形 A/B 兩半", () => {
     expect(doc.cells["2_2"]!.cat).toBe("cA");
     expect(doc.cells["2_2"]!.feature).toBe(featA);
 
-    // 交界不留白縫：中線經過（兩半都選到）的格子每一格都完整歸給 A 或 B
-    // ——依面積多數整格接管，不會兩邊各留半塊斜切多邊形而中間露白。
+    // 交界不留白縫：中線經過（兩半都選到）的格子，主片段 + frags 完整鋪滿整格
+    // （面積和 ≈ 1），且同時含 cA 與 cB 兩片。
     for (const k of rA.keys.filter((x) => rB.keys.includes(x))) {
       const d = doc.cells[k]!;
-      expect(d.cat === "cA" || d.cat === "cB").toBe(true);
-      expect(d.poly).toBeUndefined();
+      const parts = cellParts(d);
+      const cats2 = new Set(parts.map((p) => p.cat));
+      expect(cats2.has("cA") && cats2.has("cB")).toBe(true);
+      const covered = parts.reduce((s, p) => s + (p.poly ? polyArea(p.poly) : 1), 0);
+      expect(covered).toBeGreaterThan(0.98);
+      expect(covered).toBeLessThan(1.05);
     }
   });
 });

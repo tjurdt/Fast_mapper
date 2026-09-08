@@ -48,9 +48,7 @@ export function AssignSheet({ onClose }: { onClose: () => void }) {
   // 讓「調整既有區域」順手。若只是新區域剛好和鄰區共用了分割線上的邊界格（少數重疊），
   // 就不要預帶 —— 否則把新的一半標成別的分類時，會連舊的一半一起被改掉。
   const soleFeature =
-    marks.length === 1 &&
-    marks[0]!.type === "feature" &&
-    marks[0]!.count >= Math.max(2, selCount * 0.6)
+    marks.length === 1 && marks[0]!.type === "feature" && marks[0]!.count >= Math.max(2, selCount * 0.6)
       ? (p.doc.features.find((f) => f.id === marks[0]!.id) ?? null)
       : null;
 

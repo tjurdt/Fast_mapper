@@ -33,13 +33,28 @@ function coerceCell(raw: unknown): Cell | null {
   if (typeof r.plan === "string") cell.plan = r.plan;
   if (typeof r.cat === "string") cell.cat = r.cat;
   if (typeof r.feature === "string") cell.feature = r.feature;
-  if (Array.isArray(r.poly)) {
-    cell.poly = (r.poly as unknown[])
+  const coercePoly = (raw: unknown): [number, number][] | null => {
+    if (!Array.isArray(raw)) return null;
+    return raw
       .filter(
         (p): p is [number, number] =>
           Array.isArray(p) && p.length >= 2 && typeof p[0] === "number" && typeof p[1] === "number",
       )
       .map((p) => [p[0], p[1]] as [number, number]);
+  };
+  const poly = coercePoly(r.poly);
+  if (poly) cell.poly = poly;
+  if (Array.isArray(r.frags)) {
+    const frags = (r.frags as unknown[])
+      .map((f) => {
+        if (!f || typeof f !== "object") return null;
+        const fr = f as Record<string, unknown>;
+        const p = coercePoly(fr.poly);
+        if (typeof fr.cat !== "string" || typeof fr.feature !== "string" || !p || p.length < 3) return null;
+        return { cat: fr.cat, feature: fr.feature, poly: p };
+      })
+      .filter((f): f is NonNullable<typeof f> => !!f);
+    if (frags.length) cell.frags = frags;
   }
   return cell;
 }
@@ -69,6 +84,10 @@ export function normalizeDoc(input: MapDoc): MapDoc {
     const cell = coerceCell(input.cells[k]);
     if (!cell) continue;
     if (cell.feature && !featureIds.has(cell.feature)) delete cell.feature;
+    if (cell.frags) {
+      cell.frags = cell.frags.filter((f) => featureIds.has(f.feature));
+      if (!cell.frags.length) delete cell.frags;
+    }
     if (Object.keys(cell).length === 0) continue;
     cells[k] = cell;
   }

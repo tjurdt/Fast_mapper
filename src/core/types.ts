@@ -42,6 +42,17 @@ export interface Feature {
  */
 export type CellPoly = ReadonlyArray<readonly [number, number]>;
 
+/**
+ * 一格被內部分界（切線）切成多塊、分屬不同命名區域時，除了主片段
+ * （Cell 上的 cat/feature/poly）以外的其餘片段。poly 必為 length>=3 的局部多邊形，
+ * 與主片段及彼此互不重疊（同一組切線的互補裁切）。
+ */
+export interface CellFragment {
+  cat: string;
+  feature: string;
+  poly: CellPoly;
+}
+
 export interface Cell {
   /** PlanLayer id（規劃底圖） */
   plan?: string;
@@ -51,6 +62,8 @@ export interface Cell {
   feature?: string;
   /** 斜切外形 */
   poly?: CellPoly;
+  /** 這格被切成多塊時的其餘片段（面積較小的那些）。 */
+  frags?: CellFragment[];
 }
 
 /** 切線 / 對齊帶。端點座標以「格」為單位（非像素）。 */

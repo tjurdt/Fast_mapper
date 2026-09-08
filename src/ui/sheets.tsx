@@ -43,8 +43,14 @@ export function AssignSheet({ onClose }: { onClose: () => void }) {
   const p = store.project.value!;
   const numbers = store.numbers.value;
   const marks = useMemo(() => store.selectionOverlapMarks(), []);
+  const selCount = useMemo(() => store.selectionSourceSize(), []);
+  // 只有「這塊選取基本上就是既有的某個命名區域」（重疊佔多數）時，才預先帶入該區域，
+  // 讓「調整既有區域」順手。若只是新區域剛好和鄰區共用了分割線上的邊界格（少數重疊），
+  // 就不要預帶 —— 否則把新的一半標成別的分類時，會連舊的一半一起被改掉。
   const soleFeature =
-    marks.length === 1 && marks[0]!.type === "feature"
+    marks.length === 1 &&
+    marks[0]!.type === "feature" &&
+    marks[0]!.count >= Math.max(2, selCount * 0.6)
       ? (p.doc.features.find((f) => f.id === marks[0]!.id) ?? null)
       : null;
 

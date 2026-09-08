@@ -294,7 +294,13 @@ export function selectRect(rect: readonly [number, number, number, number], add 
   if (!geo || !p) return;
   const keys = geo.cellsInRect(rect[0], rect[1], rect[2], rect[3], p.view.view === "actual");
   const next = add ? new Set(selection.value) : new Set<CellKey>();
-  for (const k of keys) next.add(k);
+  for (const k of keys) {
+    // 網格框選只吃「整格」：略過屬於線條物件的斜切格，選取邊界才會貼著既有物件、
+    // 不會咬進去也不會沿用物件的鋸齒外形。
+    const poly = p.doc.cells[k]?.poly;
+    if (poly && poly.length >= 3) continue;
+    next.add(k);
+  }
   selection.value = next;
   if (selectionShapes.value.size) selectionShapes.value = new Map();
 }
@@ -330,6 +336,18 @@ export interface OverlapMark {
   name: string;
   color: string;
   count: number;
+}
+
+/** 目前選取涵蓋的格數（band 格展開到底下的一般格後去重）。 */
+export function selectionSourceSize(): number {
+  const geo = geometry.value;
+  if (!geo) return selection.value.size;
+  const src = new Set<CellKey>();
+  for (const k of selection.value) {
+    src.add(k);
+    if (k.charCodeAt(0) === 66) for (const nk of geo.gridKeysUnderQuad(geo.keyQuad(k))) src.add(nk);
+  }
+  return src.size;
 }
 
 /** 目前選取的格子（band 格展開到底下的一般格）重疊到的既有命名區域 / 分類，依格數排序。 */

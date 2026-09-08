@@ -9,7 +9,7 @@ import { bandKey, isBandKey, keyRC, parseBandKey } from "../core/keys";
 import { cellHidden } from "../core/cells";
 import { MapGeometry } from "../core/geometry";
 import { cutGeom } from "../core/bands";
-import { clamp } from "../core/poly";
+import { clamp, polyArea } from "../core/poly";
 
 const UNNAMED_PREFIX = "未命名";
 const MAX_CUT_DEPTH = 8;
@@ -87,10 +87,25 @@ export function assignCells(doc: MapDoc, keys: Iterable<CellKey>, args: AssignAr
   }
 
   for (const k of keys) {
-    const cur: Cell = doc.cells[k] ? { ...doc.cells[k]! } : {};
+    const prev = doc.cells[k];
+    const cur: Cell = prev ? { ...prev } : {};
     if (cellHidden(cur)) delete cur.poly;
-    if (args.shapes?.has(k)) {
-      const sp = args.shapes.get(k);
+    const hasShape = args.shapes?.has(k) ?? false;
+    const sp = hasShape ? (args.shapes!.get(k) ?? null) : undefined;
+
+    // 這格已屬於別的命名區域、而且是被切線切出來的「斜切格」時，依面積多數決定歸屬：
+    // 佔比較少的一方不動它，避免先框選 A 半、再框選 B 半時把 A 半（或其邊角）一起改掉。
+    if (
+      prev?.feature &&
+      prev.feature !== feature.id &&
+      Array.isArray(prev.poly) &&
+      prev.poly.length >= 3
+    ) {
+      const incomingArea = sp && sp.length >= 3 ? polyArea(sp) : 1;
+      if (incomingArea <= polyArea(prev.poly)) continue;
+    }
+
+    if (hasShape) {
       if (sp) cur.poly = sp;
       else delete cur.poly;
     }
